@@ -122,7 +122,6 @@ INSERT INTO Tour (startTime, endTime, guide, path) VALUES
 ('2024-11-17 18:30:00', '2024-11-17 21:30:00', 'Creepy Carl', 'Victorian District -> Old Prison -> Haunted Bridge -> Ghost Alley'),
 ('2024-11-22 19:30:00', '2024-11-22 22:30:00', 'Paranormal Pam', 'Ancient Graveyard -> Cursed Mansion -> Phantom Forest Trail');
 
--- Insert Sighting Comments
 INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES 
 (2, 1, '2024-11-01 10:00:00', 'I saw the same thing in that area last week! Definitely legitimate.'),
 (3, 1, '2024-11-01 12:30:00', 'The temperature dropped significantly when I visited this location.'),
@@ -130,7 +129,6 @@ INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUE
 (4, 3, '2024-11-02 09:00:00', 'I captured some EVP recordings near this location around the same time!'),
 (5, 4, '2024-11-03 11:00:00', 'This matches historical records of hauntings in this building.');
 
--- Insert Ghost Comments (CORRECTED)
 INSERT INTO Ghost_Comment (userID, ghostID, reportTime, description) VALUES 
 (1, 1, '2024-10-25 14:00:00', 'Encountered this entity three times. Very active poltergeist, handles with care.'),
 (2, 2, '2024-10-26 16:30:00', 'Lady Grey is a peaceful spirit. She seems to be searching for something.'),
