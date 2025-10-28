@@ -1,3 +1,5 @@
+---- Create Tables ----
+
 CREATE TABLE User (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(32),
@@ -90,6 +92,8 @@ CREATE TABLE Ghost_Buster_Fights_Ghost (
     FOREIGN KEY (ghostID) REFERENCES Ghost(id)
 );
 
+---- Populate Tables ----
+
 INSERT INTO User (username, password, email) VALUES 
 ('spooky_sam', 'hashed_password_123', 'sam@ghosthunters.com'),
 ('paranormal_pat', 'hashed_password_456', 'pat@spiritwatch.com'),
@@ -165,3 +169,168 @@ INSERT INTO Tour_Sign_Up (userID, tourID) VALUES
 (5, 1),
 (5, 3),
 (5, 4);
+
+INSERT INTO Ghost_Buster_Fights_Ghost (userID, ghostID) VALUES 
+(1, 1),
+(1, 3),
+(1, 5),
+(3, 2),
+(3, 4),
+(4, 1),
+(4, 2),
+(4, 3),
+(4, 5);
+
+---- User Input into Database ----
+INSERT INTO Sighting (visibility, time, userReportID, latitude, longitude)
+VALUES (?, ?, ?, ?, ?);
+
+INSERT INTO Sighting_Reports_Ghost (sightingID, ghostID)
+VALUES (newSightingID, ?);
+
+INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description)
+VALUES (?, ?, NOW(), ?);
+
+INSERT INTO Ghost_Comment (userID, ghostID, reportTime, description)
+VALUES (?, ?, NOW(), ?);
+
+INSERT INTO Tour (startTime, endTime, guide, path)
+VALUES (?, ?, ?, ?);
+
+INSERT INTO Tour_Includes (tourID, ghostID)
+VALUES (newTourID, ?);
+
+INSERT INTO Tour_Sign_Up (userID, tourID)
+VALUES (?, ?);
+
+INSERT INTO Ghost (type, name, description, visibility)
+VALUES (?, ?, ?, ?);
+
+---- Update Tables ----
+
+UPDATE User 
+SET username = ?, 
+    password = ?, 
+    email = ?
+WHERE id = ?;
+
+UPDATE Ghost_Buster 
+SET ghosts_busted = ?, 
+    alias = ?
+WHERE userID = ?;
+
+UPDATE Sighting 
+SET visibility = ?, 
+    time = ?, 
+    userReportID = ?, 
+    latitude = ?, 
+    longitude = ?
+WHERE id = ?;
+
+UPDATE Ghost 
+SET type = ?, 
+    name = ?, 
+    description = ?
+WHERE id = ?;
+
+UPDATE Tour 
+SET startTime = ?, 
+    endTime = ?, 
+    guide = ?, 
+    path = ?
+WHERE id = ?;
+
+UPDATE Sighting_Comment 
+SET reportTime = ?, 
+    description = ?
+WHERE userID = ? AND sightingID = ?;
+
+UPDATE Ghost_Comment 
+SET reportTime = ?, 
+    description = ?
+WHERE userID = ? AND ghostID = ?;
+
+---- Delete from Tables ----
+
+DELETE FROM Ghost_Buster_Fights_Ghost
+WHERE userID = ?;
+
+DELETE FROM Ghost_Buster
+WHERE userID = ?;
+
+DELETE FROM Sighting_Comment
+WHERE userID = ?;
+
+DELETE FROM Ghost_Comment
+WHERE userID = ?;
+
+DELETE FROM Tour_Sign_Up
+WHERE userID = ?;
+
+DELETE FROM Sighting_Reports_Ghost
+WHERE sightingID IN (SELECT id FROM Sighting WHERE userReportID = ?);
+
+DELETE FROM Sighting_Comment
+WHERE sightingID IN (SELECT id FROM Sighting WHERE userReportID = ?);
+
+DELETE FROM Sighting
+WHERE userReportID = ?;
+
+DELETE FROM User
+WHERE id = ?;
+
+DELETE FROM Sighting_Reports_Ghost
+WHERE ghostID = ?;
+
+DELETE FROM Ghost_Comment
+WHERE ghostID = ?;
+
+DELETE FROM Tour_Includes
+WHERE ghostID = ?;
+
+DELETE FROM Ghost_Buster_Fights_Ghost
+WHERE ghostID = ?;
+
+DELETE FROM Ghost
+WHERE id = ?;
+
+DELETE FROM Sighting_Comment
+WHERE sightingID = ?;
+
+DELETE FROM Sighting_Reports_Ghost
+WHERE sightingID = ?;
+
+DELETE FROM Sighting
+WHERE id = ?;
+
+DELETE FROM Tour_Sign_Up
+WHERE tourID = ?;
+
+DELETE FROM Tour_Includes
+WHERE tourID = ?;
+
+DELETE FROM Tour
+WHERE id = ?;
+
+DELETE FROM Ghost_Buster_Fights_Ghost
+WHERE userID = ?;
+
+DELETE FROM Ghost_Buster
+WHERE userID = ?;
+
+---- Advanced Commands ----
+ALTER TABLE Tour
+ADD CONSTRAINT checkTime
+CHECK (startTime < endTime);
+
+DELIMITER $$
+CREATE TRIGGER incrementGhostsBustedTrigger
+AFTER INSERT ON Ghost_Buster_Fights_Ghost
+FOR EACH ROW
+	BEGIN
+		UPDATE Ghost_Buster
+SET ghosts_busted = ghosts_busted + 1
+WHERE userID = new.userID;
+	END
+$$
+DELIMITER ;
