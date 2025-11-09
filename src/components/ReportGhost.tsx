@@ -7,6 +7,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { GhostSighting, User } from '../types';
 import { MapPin, Clock, Eye } from 'lucide-react';
+import axios from 'axios';
 
 interface ReportGhostProps {
   user: User;
@@ -23,14 +24,14 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log("submittiddng)")
+    axios.get("http://localhost:8100")
+    .then(res => console.log(res.data))
+    .catch(err => console.log(err));
 
     const sighting: Omit<GhostSighting, 'id' | 'timestamp'> = {
       userId: user.id,
@@ -44,35 +45,7 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
 
     onSubmitSighting(sighting);
     setIsSubmitting(false);
-    setSubmitted(true);
-
-    // Reset form after 3 seconds
-    setTimeout(() => {
-      setSubmitted(false);
-      setFormData({
-        location: '',
-        description: '',
-        ghostType: '',
-        timeOfSighting: '',
-        visibilityLevel: ''
-      });
-    }, 3000);
   };
-
-  if (submitted) {
-    return (
-      <div className="max-w-2xl mx-auto p-4">
-        <Card className="text-center">
-          <CardContent className="pt-6">
-            <h2 className="text-xl mb-2">Ghost Sighting Reported!</h2>
-            <p className="text-muted-foreground">
-              Thank you for contributing to our paranormal database.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-2xl mx-auto p-4">
