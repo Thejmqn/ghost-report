@@ -16,18 +16,57 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     email: '',
     password: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Mock authentication - in real app this would call backend
-    const user: User = {
-      id: Math.random().toString(36).substr(2, 9),
-      username: formData.username,
-      email: formData.email
-    };
-    
-    onLogin(user);
+    setError(null);
+    setLoading(true);
+
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+
+    (async () => {
+      try {
+        if (isSignUp) {
+          const resp = await fetch(`${apiBase}/api/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: formData.username,
+              email: formData.email,
+              password: formData.password
+            })
+          });
+
+          if (resp.status === 201) {
+            const data = await resp.json();
+            onLogin({ id: String(data.id), username: data.username, email: data.email });
+          } else {
+            const err = await resp.json().catch(() => ({}));
+            setError(err.error || err.message || `Registration failed (${resp.status})`);
+          }
+        } else {
+          const resp = await fetch(`${apiBase}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: formData.username, password: formData.password })
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            onLogin({ id: String(data.id), username: data.username, email: data.email });
+          } else {
+            const err = await resp.json().catch(() => ({}));
+            setError(err.error || err.message || `Login failed (${resp.status})`);
+          }
+        }
+      } catch (e: any) {
+        setError(e?.message || 'Network error');
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   return (
@@ -82,8 +121,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             </div>
             
             <Button type="submit" className="w-full">
-              {isSignUp ? 'Sign Up' : 'Sign In'}
+              {loading ? 'Please wait...' : isSignUp ? 'Sign Up' : 'Sign In'}
             </Button>
+            {error && <div className="text-sm text-destructive mt-2">{error}</div>}
             
             <Button
               type="button"

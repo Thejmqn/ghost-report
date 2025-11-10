@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LoginScreen } from './components/LoginScreen';
 import { Navigation } from './components/Navigation';
 import { ReportGhost } from './components/ReportGhost';
@@ -9,31 +9,42 @@ import { User, GhostSighting, Screen } from './types';
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentScreen, setCurrentScreen] = useState<Screen>('report');
-  const [ghostSightings, setGhostSightingsState] = useState<GhostSighting[]>([
-    // Sample data for demonstration
-    {
-      id: '1',
-      userId: 'sample-user',
-      username: 'ghost_hunter_101',
-      location: 'Library 3rd Floor - Study Room B',
-      description: 'I was studying late when I saw a translucent figure of an elderly woman in Victorian dress walking between the bookshelves. She seemed to be searching for something specific. When I blinked, she was gone.',
-      ghostType: 'Victorian Lady',
-      timeOfSighting: 'Around 11:45 PM on October 31st',
-      visibilityLevel: 'Clear',
-      timestamp: new Date('2024-10-31T23:45:00')
-    },
-    {
-      id: '2',
-      userId: 'sample-user-2',
-      username: 'paranormal_student',
-      location: 'Main Hall Basement',
-      description: 'Heard footsteps and piano music coming from the old music room that has been locked for years. The temperature dropped significantly as I approached.',
-      ghostType: 'Phantom Musician',
-      timeOfSighting: 'Tuesday night around 2 AM',
-      visibilityLevel: 'Faint',
-      timestamp: new Date('2024-11-01T02:00:00')
-    }
-  ]);
+  const [ghostSightings, setGhostSightingsState] = useState<GhostSighting[]>([]);
+  const [loadingSightings, setLoadingSightings] = useState(false);
+
+  useEffect(() => {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    const fetchSightings = async () => {
+      setLoadingSightings(true);
+      try {
+        const resp = await fetch(`${apiBase}/api/sightings`);
+        if (!resp.ok) throw new Error('Failed to load sightings');
+        const data = await resp.json();
+        // Ensure timestamps are Date objects
+        const parsed: GhostSighting[] = (data || []).map((d: any) => ({
+          id: String(d.id),
+          userId: String(d.userId || ''),
+          username: d.username || 'Unknown',
+          location: d.location || 'Unknown',
+          description: d.description || '',
+          ghostType: d.ghostType || '',
+          timeOfSighting: d.timeOfSighting || d.time || '',
+          visibilityLevel: d.visibilityLevel || 'Faint',
+          timestamp: d.timestamp ? new Date(d.timestamp) : (d.time ? new Date(d.time) : new Date())
+        }));
+        setGhostSightingsState(parsed);
+
+        console.log("HELLO WORLD TEST");
+        console.log(parsed);
+      } catch (err) {
+        console.error('Error fetching sightings:', err);
+      } finally {
+        setLoadingSightings(false);
+      }
+    };
+
+    fetchSightings();
+  }, []);
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
