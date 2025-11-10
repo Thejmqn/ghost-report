@@ -58,23 +58,47 @@ async function initSqlite() {
     sqliteDb.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
   });
 
-  // Run PRAGMA and execute transformed SQL
+  // Run PRAGMA and execute transformed SQL in a safe, idempotent way
   const transformed = transformSqlForSqlite(initSQLraw);
-  try {
-    await run('PRAGMA foreign_keys = ON;');
-    await all(transformed);
-    console.log('SQLite database initialized (or already present).');
-  } catch (err) {
-    // If exec-style multiple statements failed, try splitting by semicolon and run individually
-    try {
-      const statements = transformed.split(/;\s*\n/).map(s => s.trim()).filter(Boolean);
-      for (const s of statements) {
-        await run(s + ';');
+  await run('PRAGMA foreign_keys = ON;');
+
+  // Split into individual statements (handles semicolon + optional whitespace/newline)
+  const statements = transformed.split(/;\s*(?:\r?\n|$)/).map(s => s.trim()).filter(Boolean);
+
+  // First, execute all CREATE TABLE statements (these are idempotent due to IF NOT EXISTS)
+  for (const stmt of statements) {
+    if (/^CREATE\s+TABLE/i.test(stmt)) {
+      try {
+        await run(stmt + ';');
+      } catch (e) {
+        // ignore errors from existing schema
       }
-      console.log('SQLite database initialized via statements.');
-    } catch (err2) {
-      console.error('Error initializing SQLite DB:', err2.message || err2);
     }
+  }
+
+  // Determine whether to run seed INSERTS: only run when the User table is empty
+  let userCount = 0;
+  try {
+    const row = await get('SELECT COUNT(*) as cnt FROM User');
+    userCount = row?.cnt || 0;
+  } catch (e) {
+    userCount = 0;
+  }
+
+  if (userCount === 0) {
+    // Run non-CREATE statements (inserts/populates)
+    for (const stmt of statements) {
+      if (!/^CREATE\s+TABLE/i.test(stmt)) {
+        try {
+          await run(stmt + ';');
+        } catch (e) {
+          console.warn('Failed to execute statement during seed:', e.message || e);
+        }
+      }
+    }
+    console.log('SQLite database initialized with seed data.');
+  } else {
+    console.log('SQLite schema ensured; existing data preserved (seed skipped).');
   }
 
   dbClient = {
@@ -102,8 +126,28 @@ async function initMysql() {
   const promiseConn = connection.promise();
   try {
     await promiseConn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`;`);
-    await promiseConn.query(`USE \`${DB_NAME}\`;` + initSQLraw);
-    console.log('MySQL database initialized (or already present).');
+    // Split the SQL and run CREATE TABLE statements first
+    const statements = initSQLraw.split(/;\s*(?:\r?\n|$)/).map(s => s.trim()).filter(Boolean);
+    await promiseConn.query(`USE \`${DB_NAME}\`;`);
+    for (const stmt of statements) {
+      if (/^CREATE\s+TABLE/i.test(stmt)) {
+        try { await promiseConn.query(stmt + ';'); } catch (e) { /* ignore */ }
+      }
+    }
+
+    // Only seed if User table is empty
+    const [rowsCount] = await promiseConn.query('SELECT COUNT(*) AS cnt FROM `User`');
+    const cnt = rowsCount && rowsCount[0] ? rowsCount[0].cnt || rowsCount[0].CNT || 0 : 0;
+    if (cnt === 0) {
+      for (const stmt of statements) {
+        if (!/^CREATE\s+TABLE/i.test(stmt)) {
+          try { await promiseConn.query(stmt + ';'); } catch (e) { console.warn('Seed statement failed:', e.message || e); }
+        }
+      }
+      console.log('MySQL database initialized with seed data.');
+    } else {
+      console.log('MySQL schema ensured; existing data preserved (seed skipped).');
+    }
   } catch (err) {
     console.warn('Warning executing MySQL init (may already be initialized or connection failed):', err.message || err);
   }
@@ -142,14 +186,17 @@ app.get('/api/sightings', async (req, res) => {
   try {
     while (!dbClient) await new Promise(r => setTimeout(r, 50));
 
-    // Use GROUP_CONCAT / group_concat for MySQL/SQLite compatibility
-    const sql = `SELECT S.id, S.visibility, S.time as time, S.userReportID, S.latitude, S.longitude, U.username, GROUP_CONCAT(G.name) AS ghost_names
-                 FROM Sighting S
-                 LEFT JOIN User U ON S.userReportID = U.id
-                 LEFT JOIN Sighting_Reports_Ghost SRG ON S.id = SRG.sightingID
-                 LEFT JOIN Ghost G ON SRG.ghostID = G.id
-                 GROUP BY S.id
-                 ORDER BY S.time DESC`;
+    // Use GROUP_CONCAT / group_concat for MySQL/SQLite compatibility and include the earliest report description
+    const sql = `SELECT S.id, S.visibility, S.time as time, S.userReportID, S.latitude, S.longitude, U.username,
+                         GROUP_CONCAT(G.name) AS ghost_names,
+                         (SELECT SC.description FROM Sighting_Comment SC WHERE SC.sightingID = S.id ORDER BY SC.reportTime ASC LIMIT 1) AS description,
+                         (SELECT MIN(SC.reportTime) FROM Sighting_Comment SC WHERE SC.sightingID = S.id) AS reportTime
+                  FROM Sighting S
+                  LEFT JOIN User U ON S.userReportID = U.id
+                  LEFT JOIN Sighting_Reports_Ghost SRG ON S.id = SRG.sightingID
+                  LEFT JOIN Ghost G ON SRG.ghostID = G.id
+                  GROUP BY S.id
+                  ORDER BY S.time DESC`;
 
     const rows = await dbClient.query(sql);
 
@@ -158,11 +205,11 @@ app.get('/api/sightings', async (req, res) => {
       userId: String(r.userReportID || ''),
       username: r.username || 'Unknown',
       location: (r.latitude && r.longitude) ? `${r.latitude}, ${r.longitude}` : 'Unknown location',
-      description: '',
+      description: r.description || '',
       ghostType: r.ghost_names ? String(r.ghost_names).split(',')[0] : '',
       timeOfSighting: r.time ? String(r.time) : '',
       visibilityLevel: (r.visibility >= 8) ? 'Very Clear' : (r.visibility >=5 ? 'Clear' : 'Faint'),
-      timestamp: r.time ? new Date(r.time) : new Date()
+      timestamp: r.reportTime ? new Date(r.reportTime) : (r.time ? new Date(r.time) : new Date())
     }));
 
     res.json(mapped);
@@ -241,6 +288,77 @@ app.post('/api/login', async (req, res) => {
     return res.json({ id: user.id, username: user.username, email: user.email });
   } catch (err) {
     console.error('Login error:', err.message || err);
+    return res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Create a new sighting
+app.post('/api/sightings', async (req, res) => {
+  const { userId, location, description, ghostType, timeOfSighting, visibilityLevel } = req.body || {};
+  if (!userId || !location || !description || !ghostType) return res.status(400).json({ error: 'missing_fields' });
+
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+
+    // map visibility level to numeric
+    const visMap = { 'Faint': 3, 'Clear': 6, 'Very Clear': 9 };
+    const visibility = visMap[visibilityLevel] || 5;
+
+    // Insert sighting
+    if (dbClient.type === 'mysql') {
+      const result = await dbClient.run('INSERT INTO Sighting (visibility, time, userReportID, latitude, longitude) VALUES (?, NOW(), ?, NULL, NULL)', [visibility, userId]);
+      const sightingId = result.insertId;
+
+      // Insert comment as the initial report; include reported time string inside description
+      const repDesc = `Reported time: ${timeOfSighting || ''}\n${description}`;
+      await dbClient.run('INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, NOW(), ?)', [userId, sightingId, repDesc]);
+
+      // find or create ghost
+      let ghosts = await dbClient.query('SELECT id FROM Ghost WHERE name = ? OR type = ? LIMIT 1', [ghostType, ghostType]);
+      let ghostId = ghosts && ghosts.length ? ghosts[0].id : null;
+      if (!ghostId) {
+        const gres = await dbClient.run('INSERT INTO Ghost (type, name, description, visibility) VALUES (?, ?, ?, ?)', [ghostType, ghostType, '', visibility]);
+        ghostId = gres.insertId;
+      }
+
+      await dbClient.run('INSERT INTO Sighting_Reports_Ghost (sightingID, ghostID) VALUES (?, ?)', [sightingId, ghostId]);
+
+      // return created sighting
+      const rows = await dbClient.query(`SELECT S.id, S.visibility, S.time as time, S.userReportID, U.username,
+                                         (SELECT SC.description FROM Sighting_Comment SC WHERE SC.sightingID = S.id ORDER BY SC.reportTime ASC LIMIT 1) AS description,
+                                         (SELECT MIN(SC.reportTime) FROM Sighting_Comment SC WHERE SC.sightingID = S.id) AS reportTime
+                                         FROM Sighting S
+                                         LEFT JOIN User U ON S.userReportID = U.id
+                                         WHERE S.id = ?`, [sightingId]);
+      const r = rows[0];
+      return res.status(201).json({ id: r.id, userId: String(r.userReportID), username: r.username, location: location, description: r.description, ghostType, timeOfSighting: timeOfSighting || r.time, visibilityLevel: visibilityLevel || (r.visibility>=8?'Very Clear':(r.visibility>=5?'Clear':'Faint')), timestamp: r.reportTime || r.time });
+    } else {
+      const result = await dbClient.run('INSERT INTO Sighting (visibility, time, userReportID, latitude, longitude) VALUES (?, datetime(\'now\'), ?, NULL, NULL)', [visibility, userId]);
+      const sightingId = result.lastID;
+
+      const repDesc = `Reported time: ${timeOfSighting || ''}\n${description}`;
+      await dbClient.run('INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, datetime(\'now\'), ?)', [userId, sightingId, repDesc]);
+
+      let ghosts = await dbClient.query('SELECT id FROM Ghost WHERE name = ? OR type = ? LIMIT 1', [ghostType, ghostType]);
+      let ghostId = ghosts && ghosts.length ? ghosts[0].id : null;
+      if (!ghostId) {
+        const gres = await dbClient.run('INSERT INTO Ghost (type, name, description, visibility) VALUES (?, ?, ?, ?)', [ghostType, ghostType, '', visibility]);
+        ghostId = gres.lastID;
+      }
+
+      await dbClient.run('INSERT INTO Sighting_Reports_Ghost (sightingID, ghostID) VALUES (?, ?)', [sightingId, ghostId]);
+
+      const rows = await dbClient.query(`SELECT S.id, S.visibility, S.time as time, S.userReportID, U.username,
+                                         (SELECT SC.description FROM Sighting_Comment SC WHERE SC.sightingID = S.id ORDER BY SC.reportTime ASC LIMIT 1) AS description,
+                                         (SELECT MIN(SC.reportTime) FROM Sighting_Comment SC WHERE SC.sightingID = S.id) AS reportTime
+                                         FROM Sighting S
+                                         LEFT JOIN User U ON S.userReportID = U.id
+                                         WHERE S.id = ?`, [sightingId]);
+      const r = rows[0];
+      return res.status(201).json({ id: r.id, userId: String(r.userReportID), username: r.username, location: location, description: r.description, ghostType, timeOfSighting: timeOfSighting || r.time, visibilityLevel: visibilityLevel || (r.visibility>=8?'Very Clear':(r.visibility>=5?'Clear':'Faint')), timestamp: r.reportTime || r.time });
+    }
+  } catch (err) {
+    console.error('Create sighting error:', err);
     return res.status(500).json({ error: 'internal' });
   }
 });

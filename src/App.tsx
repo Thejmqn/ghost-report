@@ -55,14 +55,9 @@ export default function App() {
     setCurrentScreen('report');
   };
 
-  const handleSubmitSighting = (sightingData: Omit<GhostSighting, 'id' | 'timestamp'>) => {
-    const newSighting: GhostSighting = {
-      ...sightingData,
-      id: Math.random().toString(36).substr(2, 9),
-      timestamp: new Date()
-    };
-    
-    setGhostSightingsState(prev => [newSighting, ...prev]);
+  const handleSubmitSighting = (sightingData: GhostSighting) => {
+    // Accept a full GhostSighting (from backend) and prepend to list
+    setGhostSightingsState(prev => [sightingData, ...prev]);
   };
 
   const handleUpdateSighting = (id: string, updatedData: Partial<GhostSighting>) => {
