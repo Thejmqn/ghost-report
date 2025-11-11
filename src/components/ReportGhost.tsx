@@ -7,13 +7,10 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { GhostSighting, User } from '../types';
 import { MapPin, Clock, Eye } from 'lucide-react';
-import axios from 'axios';
-
 interface ReportGhostProps {
   user: User;
   onSubmitSighting: (sighting: Omit<GhostSighting, 'id' | 'timestamp'>) => void;
 }
-
 export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
   const [formData, setFormData] = useState({
     location: '',
@@ -22,17 +19,11 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
     timeOfSighting: '',
     visibilityLevel: '' as 'Faint' | 'Clear' | 'Very Clear' | ''
   });
-
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  const [submitted, setSubmitted] = useState(false);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    console.log("submittiddng)")
-    axios.get("http://localhost:8100")
-    .then(res => console.log(res.data))
-    .catch(err => console.log(err));
-
     const sighting: Omit<GhostSighting, 'id' | 'timestamp'> = {
       userId: user.id,
       username: user.username,
@@ -43,10 +34,58 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
       visibilityLevel: formData.visibilityLevel as 'Faint' | 'Clear' | 'Very Clear'
     };
 
-    onSubmitSighting(sighting);
-    setIsSubmitting(false);
-  };
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    const resp = await fetch(`${apiBase}/api/sightings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: sighting.userId,
+        username: sighting.username,
+        location: sighting.location,
+        description: sighting.description,
+        ghostType: sighting.ghostType,
+        timeOfSighting: sighting.timeOfSighting,
+        visibilityLevel: sighting.visibilityLevel,
+      })
+    });
 
+    if (resp.status === 201) {
+      const data = await resp.json();
+      setIsSubmitting(false);
+      setSubmitted(true);
+      onSubmitSighting(sighting);
+    } else {
+      const err = await resp.json().catch(() => ({}));
+      console.log(err.error || err.message || `Registration failed (${resp.status})`);
+      setIsSubmitting(false);
+    }
+    
+    // Reset form after 3 seconds
+    setTimeout(() => {
+      setSubmitted(false);
+      setFormData({
+        location: '',
+        description: '',
+        ghostType: '',
+        timeOfSighting: '',
+        visibilityLevel: ''
+      });
+    }, 3000);
+  };
+  if (submitted) {
+    return (
+      <div className="max-w-2xl mx-auto p-4">
+        <Card className="text-center">
+          <CardContent className="pt-6">
+            <h2 className="text-xl mb-2">Ghost Sighting Reported!</h2>
+            <p className="text-muted-foreground">
+              Thank you for contributing to our paranormal database.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   return (
     <div className="max-w-2xl mx-auto p-4">
       <Card>
@@ -73,7 +112,6 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
                 required
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="timeOfSighting" className="flex items-center space-x-2">
                 <Clock className="w-4 h-4" />
@@ -87,7 +125,6 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
                 required
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="ghostType">Type of Apparition</Label>
               <Input
@@ -98,7 +135,6 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
                 required
               />
             </div>
-
             <div className="space-y-2">
               <Label className="flex items-center space-x-2">
                 <Eye className="w-4 h-4" />
@@ -121,7 +157,6 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="description">Detailed Description</Label>
               <Textarea
@@ -133,7 +168,6 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
                 required
               />
             </div>
-
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? 'Submitting Report...' : 'Submit Ghost Sighting'}
             </Button>
