@@ -6,14 +6,12 @@ export interface User {
 
 export interface GhostSighting {
   id: string;
-  userId: string;
-  username: string;
-  location: string;
+  visibility: number;
+  time: Date;
+  userReportID: string;
+  latitude?: number | null;
+  longitude?: number | null;
   description: string;
-  ghostType: string;
-  timeOfSighting: string;
-  visibilityLevel: 'Faint' | 'Clear' | 'Very Clear';
-  timestamp: Date;
 }
 
 export type Screen = 'login' | 'report' | 'browse' | 'profile';

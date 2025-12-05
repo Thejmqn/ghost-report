@@ -186,30 +186,26 @@ app.get('/api/sightings', async (req, res) => {
   try {
     while (!dbClient) await new Promise(r => setTimeout(r, 50));
 
-    // Use GROUP_CONCAT / group_concat for MySQL/SQLite compatibility and include the earliest report description
-    const sql = `SELECT S.id, S.visibility, S.time as time, S.userReportID, S.latitude, S.longitude, U.username,
-                         GROUP_CONCAT(G.name) AS ghost_names,
-                         (SELECT SC.description FROM Sighting_Comment SC WHERE SC.sightingID = S.id ORDER BY SC.reportTime ASC LIMIT 1) AS description,
-                         (SELECT MIN(SC.reportTime) FROM Sighting_Comment SC WHERE SC.sightingID = S.id) AS reportTime
+    // Get sightings with description from the Sighting table and ghost name
+    const sql = `SELECT S.id, S.visibility, S.time as time, S.userReportID, S.latitude, S.longitude, S.description, U.username,
+                         (SELECT G.name FROM Sighting_Reports_Ghost SRG 
+                          LEFT JOIN Ghost G ON SRG.ghostID = G.id 
+                          WHERE SRG.sightingID = S.id LIMIT 1) AS ghost_name
                   FROM Sighting S
                   LEFT JOIN User U ON S.userReportID = U.id
-                  LEFT JOIN Sighting_Reports_Ghost SRG ON S.id = SRG.sightingID
-                  LEFT JOIN Ghost G ON SRG.ghostID = G.id
-                  GROUP BY S.id
                   ORDER BY S.time DESC`;
 
     const rows = await dbClient.query(sql);
 
     const mapped = (rows || []).map((r) => ({
       id: String(r.id),
-      userId: String(r.userReportID || ''),
-      username: r.username || 'Unknown',
-      location: (r.latitude && r.longitude) ? `${r.latitude}, ${r.longitude}` : 'Unknown location',
+      visibility: Number(r.visibility || 0),
+      time: r.time ? new Date(r.time) : new Date(),
+      userReportID: String(r.userReportID || ''),
+      latitude: (r.latitude !== undefined && r.latitude !== null) ? Number(r.latitude) : null,
+      longitude: (r.longitude !== undefined && r.longitude !== null) ? Number(r.longitude) : null,
       description: r.description || '',
-      ghostType: r.ghost_names ? String(r.ghost_names).split(',')[0] : '',
-      timeOfSighting: r.time ? String(r.time) : '',
-      visibilityLevel: (r.visibility >= 8) ? 'Very Clear' : (r.visibility >=5 ? 'Clear' : 'Faint'),
-      timestamp: r.reportTime ? new Date(r.reportTime) : (r.time ? new Date(r.time) : new Date())
+      ghostName: r.ghost_name || 'Unknown'
     }));
 
     res.json(mapped);
@@ -294,68 +290,130 @@ app.post('/api/login', async (req, res) => {
 
 // Create a new sighting
 app.post('/api/sightings', async (req, res) => {
-  const { userId, location, description, ghostType, timeOfSighting, visibilityLevel } = req.body || {};
-  if (!userId || !location || !description || !ghostType) return res.status(400).json({ error: 'missing_fields' });
+  console.log('Received sighting POST request:', JSON.stringify(req.body, null, 2));
+  
+  const { userId, userReportID, latitude, longitude, description, ghostID, timeOfSighting, visibility } = req.body || {};
+  // Accept either `userReportID` (DB field) or `userId` (frontend alias)
+  const reporter = userReportID || userId;
+  
+  console.log('Extracted values:', { reporter, latitude, longitude, description, ghostID, timeOfSighting, visibility });
+  
+  // Require essential fields
+  if (!reporter || !description) {
+    console.log('Missing required fields - reporter:', reporter, 'description:', description);
+    return res.status(400).json({ error: 'missing_fields' });
+  }
 
   try {
     while (!dbClient) await new Promise(r => setTimeout(r, 50));
 
-    // map visibility level to numeric
-    const visMap = { 'Faint': 3, 'Clear': 6, 'Very Clear': 9 };
-    const visibility = visMap[visibilityLevel] || 5;
+    // Use provided visibility or default to 5
+    const visibilityNum = (visibility !== undefined && visibility !== null && !Number.isNaN(Number(visibility)))
+      ? Number(visibility)
+      : 5;
 
-    // Insert sighting
+    // Build description that includes reported time
+    const fullDescription = timeOfSighting 
+      ? `Reported time: ${timeOfSighting}\n${description}`
+      : description;
+
+    // Insert sighting with description stored in the Sighting table
     if (dbClient.type === 'mysql') {
-      const result = await dbClient.run('INSERT INTO Sighting (visibility, time, userReportID, latitude, longitude) VALUES (?, NOW(), ?, NULL, NULL)', [visibility, userId]);
+      const result = await dbClient.run(
+        'INSERT INTO Sighting (visibility, time, userReportID, latitude, longitude, description) VALUES (?, NOW(), ?, ?, ?, ?)', 
+        [visibilityNum, reporter, latitude || null, longitude || null, fullDescription]
+      );
       const sightingId = result.insertId;
 
-      // Insert comment as the initial report; include reported time string inside description
-      const repDesc = `Reported time: ${timeOfSighting || ''}\n${description}`;
-      await dbClient.run('INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, NOW(), ?)', [userId, sightingId, repDesc]);
+      // Insert comment linking user to this sighting
+      await dbClient.run(
+        'INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, NOW(), ?)', 
+        [reporter, sightingId, fullDescription]
+      );
 
-      // find or create ghost
-      let ghosts = await dbClient.query('SELECT id FROM Ghost WHERE name = ? OR type = ? LIMIT 1', [ghostType, ghostType]);
-      let ghostId = ghosts && ghosts.length ? ghosts[0].id : null;
-      if (!ghostId) {
-        const gres = await dbClient.run('INSERT INTO Ghost (type, name, description, visibility) VALUES (?, ?, ?, ?)', [ghostType, ghostType, '', visibility]);
-        ghostId = gres.insertId;
+      // Handle ghost association
+      let finalGhostId = null;
+      
+      if (ghostID && ghostID !== '') {
+        // User selected a known ghost
+        finalGhostId = ghostID;
+      } else {
+        // No ghost selected, create/find "Unknown" ghost
+        let unknownGhosts = await dbClient.query('SELECT id FROM Ghost WHERE name = ? LIMIT 1', ['Unknown']);
+        if (unknownGhosts && unknownGhosts.length > 0) {
+          finalGhostId = unknownGhosts[0].id;
+        } else {
+          const gres = await dbClient.run('INSERT INTO Ghost (type, name, description, visibility) VALUES (?, ?, ?, ?)', ['Unknown', 'Unknown', 'Unidentified paranormal entity', visibilityNum]);
+          finalGhostId = gres.insertId;
+        }
       }
 
-      await dbClient.run('INSERT INTO Sighting_Reports_Ghost (sightingID, ghostID) VALUES (?, ?)', [sightingId, ghostId]);
+      // Link sighting to ghost
+      if (finalGhostId) {
+        await dbClient.run('INSERT INTO Sighting_Reports_Ghost (sightingID, ghostID) VALUES (?, ?)', [sightingId, finalGhostId]);
+      }
 
-      // return created sighting
-      const rows = await dbClient.query(`SELECT S.id, S.visibility, S.time as time, S.userReportID, U.username,
-                                         (SELECT SC.description FROM Sighting_Comment SC WHERE SC.sightingID = S.id ORDER BY SC.reportTime ASC LIMIT 1) AS description,
-                                         (SELECT MIN(SC.reportTime) FROM Sighting_Comment SC WHERE SC.sightingID = S.id) AS reportTime
-                                         FROM Sighting S
-                                         LEFT JOIN User U ON S.userReportID = U.id
-                                         WHERE S.id = ?`, [sightingId]);
+      // Return created sighting
+      const rows = await dbClient.query(
+        'SELECT id, visibility, time, userReportID, latitude, longitude, description FROM Sighting WHERE id = ?', 
+        [sightingId]
+      );
       const r = rows[0];
-      return res.status(201).json({ id: r.id, userId: String(r.userReportID), username: r.username, location: location, description: r.description, ghostType, timeOfSighting: timeOfSighting || r.time, visibilityLevel: visibilityLevel || (r.visibility>=8?'Very Clear':(r.visibility>=5?'Clear':'Faint')), timestamp: r.reportTime || r.time });
+      return res.status(201).json({
+        id: String(r.id),
+        visibility: Number(r.visibility || visibilityNum),
+        time: r.time || new Date(),
+        userReportID: String(r.userReportID || reporter),
+        latitude: (r.latitude !== undefined && r.latitude !== null) ? Number(r.latitude) : null,
+        longitude: (r.longitude !== undefined && r.longitude !== null) ? Number(r.longitude) : null,
+        description: r.description || fullDescription
+      });
     } else {
-      const result = await dbClient.run('INSERT INTO Sighting (visibility, time, userReportID, latitude, longitude) VALUES (?, datetime(\'now\'), ?, NULL, NULL)', [visibility, userId]);
+      // SQLite version
+      const result = await dbClient.run(
+        'INSERT INTO Sighting (visibility, time, userReportID, latitude, longitude, description) VALUES (?, datetime(\'now\'), ?, ?, ?, ?)', 
+        [visibilityNum, reporter, latitude || null, longitude || null, fullDescription]
+      );
       const sightingId = result.lastID;
 
-      const repDesc = `Reported time: ${timeOfSighting || ''}\n${description}`;
-      await dbClient.run('INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, datetime(\'now\'), ?)', [userId, sightingId, repDesc]);
+      await dbClient.run(
+        'INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, datetime(\'now\'), ?)', 
+        [reporter, sightingId, fullDescription]
+      );
 
-      let ghosts = await dbClient.query('SELECT id FROM Ghost WHERE name = ? OR type = ? LIMIT 1', [ghostType, ghostType]);
-      let ghostId = ghosts && ghosts.length ? ghosts[0].id : null;
-      if (!ghostId) {
-        const gres = await dbClient.run('INSERT INTO Ghost (type, name, description, visibility) VALUES (?, ?, ?, ?)', [ghostType, ghostType, '', visibility]);
-        ghostId = gres.lastID;
+      // Handle ghost association
+      let finalGhostId = null;
+      
+      if (ghostID && ghostID !== '') {
+        finalGhostId = ghostID;
+      } else {
+        let unknownGhosts = await dbClient.query('SELECT id FROM Ghost WHERE name = ? LIMIT 1', ['Unknown']);
+        if (unknownGhosts && unknownGhosts.length > 0) {
+          finalGhostId = unknownGhosts[0].id;
+        } else {
+          const gres = await dbClient.run('INSERT INTO Ghost (type, name, description, visibility) VALUES (?, ?, ?, ?)', ['Unknown', 'Unknown', 'Unidentified paranormal entity', visibilityNum]);
+          finalGhostId = gres.lastID;
+        }
       }
 
-      await dbClient.run('INSERT INTO Sighting_Reports_Ghost (sightingID, ghostID) VALUES (?, ?)', [sightingId, ghostId]);
+      if (finalGhostId) {
+        await dbClient.run('INSERT INTO Sighting_Reports_Ghost (sightingID, ghostID) VALUES (?, ?)', [sightingId, finalGhostId]);
+      }
 
-      const rows = await dbClient.query(`SELECT S.id, S.visibility, S.time as time, S.userReportID, U.username,
-                                         (SELECT SC.description FROM Sighting_Comment SC WHERE SC.sightingID = S.id ORDER BY SC.reportTime ASC LIMIT 1) AS description,
-                                         (SELECT MIN(SC.reportTime) FROM Sighting_Comment SC WHERE SC.sightingID = S.id) AS reportTime
-                                         FROM Sighting S
-                                         LEFT JOIN User U ON S.userReportID = U.id
-                                         WHERE S.id = ?`, [sightingId]);
+      const rows = await dbClient.query(
+        'SELECT id, visibility, time, userReportID, latitude, longitude, description FROM Sighting WHERE id = ?', 
+        [sightingId]
+      );
       const r = rows[0];
-      return res.status(201).json({ id: r.id, userId: String(r.userReportID), username: r.username, location: location, description: r.description, ghostType, timeOfSighting: timeOfSighting || r.time, visibilityLevel: visibilityLevel || (r.visibility>=8?'Very Clear':(r.visibility>=5?'Clear':'Faint')), timestamp: r.reportTime || r.time });
+      return res.status(201).json({
+        id: String(r.id),
+        visibility: Number(r.visibility || visibilityNum),
+        time: r.time || new Date(),
+        userReportID: String(r.userReportID || reporter),
+        latitude: (r.latitude !== undefined && r.latitude !== null) ? Number(r.latitude) : null,
+        longitude: (r.longitude !== undefined && r.longitude !== null) ? Number(r.longitude) : null,
+        description: r.description || fullDescription
+      });
     }
   } catch (err) {
     console.error('Create sighting error:', err);
@@ -367,4 +425,3 @@ app.post('/api/sightings', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, ChangeEvent } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -19,16 +19,16 @@ interface UserProfileProps {
 
 export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSighting }: UserProfileProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<GhostSighting>>({});
+  const [editForm, setEditForm] = useState<Partial<Omit<GhostSighting, 'time'>> & { time?: string | Date | null }>({});
 
   const startEditing = (sighting: GhostSighting) => {
     setEditingId(sighting.id);
     setEditForm({
-      location: sighting.location,
+      latitude: sighting.latitude ?? null,
+      longitude: sighting.longitude ?? null,
       description: sighting.description,
-      ghostType: sighting.ghostType,
-      timeOfSighting: sighting.timeOfSighting,
-      visibilityLevel: sighting.visibilityLevel
+      time: sighting.time ? new Date(sighting.time).toISOString() : undefined,
+      visibility: sighting.visibility
     });
   };
 
@@ -39,7 +39,14 @@ export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSig
 
   const saveEdit = () => {
     if (editingId && editForm) {
-      onUpdateSighting(editingId, editForm);
+      const updatedData: Partial<GhostSighting> = {};
+      if (editForm.latitude !== undefined) updatedData.latitude = typeof editForm.latitude === 'string' ? Number(editForm.latitude) : (editForm.latitude as any);
+      if (editForm.longitude !== undefined) updatedData.longitude = typeof editForm.longitude === 'string' ? Number(editForm.longitude) : (editForm.longitude as any);
+      if (editForm.description !== undefined) updatedData.description = String(editForm.description);
+      if (editForm.time !== undefined) updatedData.time = editForm.time ? new Date(String(editForm.time)) : undefined;
+      if (editForm.visibility !== undefined) updatedData.visibility = Number(editForm.visibility);
+
+      onUpdateSighting(editingId, updatedData);
       setEditingId(null);
       setEditForm({});
     }
@@ -104,38 +111,38 @@ export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSig
                   <CardTitle className="text-lg flex items-start space-x-2">
                     {editingId === sighting.id ? (
                       <Input
-                        value={editForm.ghostType || ''}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, ghostType: e.target.value }))}
+                        value={String(editForm.description || '').substring(0, 40)}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
                         className="text-lg"
-                        placeholder="Ghost type"
+                        placeholder="Short description/title"
                       />
                     ) : (
-                      <span>{sighting.ghostType}</span>
+                      <span>{sighting.description ? sighting.description.substring(0, 40) : 'Sighting'}</span>
                     )}
                   </CardTitle>
                   
                   <div className="flex items-center space-x-2">
                     {editingId === sighting.id ? (
                       <Select
-                        value={editForm.visibilityLevel || sighting.visibilityLevel}
-                        onValueChange={(value) => setEditForm(prev => ({ 
+                        value={String(editForm.visibility ?? sighting.visibility)}
+                        onValueChange={(value: string) => setEditForm(prev => ({ 
                           ...prev, 
-                          visibilityLevel: value as 'Faint' | 'Clear' | 'Very Clear' 
+                          visibility: Number(value)
                         }))}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Faint">Faint</SelectItem>
-                          <SelectItem value="Clear">Clear</SelectItem>
-                          <SelectItem value="Very Clear">Very Clear</SelectItem>
+                          <SelectItem value="3">Faint</SelectItem>
+                          <SelectItem value="6">Clear</SelectItem>
+                          <SelectItem value="9">Very Clear</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (
-                      <Badge className={getVisibilityColor(sighting.visibilityLevel)}>
+                      <Badge className={getVisibilityColor((sighting.visibility >= 8) ? 'Very Clear' : (sighting.visibility >=5 ? 'Clear' : 'Faint'))}>
                         <Eye className="w-3 h-3 mr-1" />
-                        {sighting.visibilityLevel}
+                        {(sighting.visibility >= 8) ? 'Very Clear' : (sighting.visibility >=5 ? 'Clear' : 'Faint')}
                       </Badge>
                     )}
                     
@@ -187,13 +194,20 @@ export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSig
                     <Label>Location:</Label>
                   </div>
                   {editingId === sighting.id ? (
-                    <Input
-                      value={editForm.location || ''}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, location: e.target.value }))}
-                      placeholder="Location"
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        value={String(editForm.latitude ?? '')}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, latitude: e.target.value ? Number(e.target.value) : null }))}
+                        placeholder="Latitude"
+                      />
+                      <Input
+                        value={String(editForm.longitude ?? '')}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, longitude: e.target.value ? Number(e.target.value) : null }))}
+                        placeholder="Longitude"
+                      />
+                    </div>
                   ) : (
-                    <p>{sighting.location}</p>
+                    <p>{(sighting.latitude !== null && sighting.longitude !== null) ? `${sighting.latitude}, ${sighting.longitude}` : 'Unknown location'}</p>
                   )}
                 </div>
                 
@@ -204,12 +218,12 @@ export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSig
                   </div>
                   {editingId === sighting.id ? (
                     <Input
-                      value={editForm.timeOfSighting || ''}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, timeOfSighting: e.target.value }))}
-                      placeholder="Time of sighting"
+                      value={String(editForm.time || '')}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setEditForm(prev => ({ ...prev, time: e.target.value }))}
+                      placeholder="ISO time (e.g., 2025-12-05T23:00:00)"
                     />
                   ) : (
-                    <p>{sighting.timeOfSighting}</p>
+                    <p>{sighting.time ? new Date(sighting.time).toLocaleString() : 'Unknown time'}</p>
                   )}
                 </div>
                 
@@ -228,8 +242,8 @@ export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSig
                 </div>
                 
                 <div className="text-xs text-muted-foreground pt-2 border-t">
-                  Submitted on {new Date(sighting.timestamp).toLocaleDateString()} at{' '}
-                  {new Date(sighting.timestamp).toLocaleTimeString()}
+                  Submitted on {sighting.time ? new Date(sighting.time).toLocaleDateString() : 'Unknown'} at{' '}
+                  {sighting.time ? new Date(sighting.time).toLocaleTimeString() : ''}
                 </div>
               </CardContent>
             </Card>

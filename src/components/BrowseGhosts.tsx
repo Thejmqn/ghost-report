@@ -15,12 +15,16 @@ export function BrowseGhosts({ sightings }: BrowseGhostsProps) {
   const [visibilityFilter, setVisibilityFilter] = useState('all');
 
   const filteredSightings = sightings.filter(sighting => {
+    const loc = (sighting.latitude !== undefined && sighting.latitude !== null && sighting.longitude !== undefined && sighting.longitude !== null)
+      ? `${sighting.latitude}, ${sighting.longitude}`
+      : 'Unknown location';
+
     const matchesSearch = 
-      sighting.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sighting.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sighting.ghostType.toLowerCase().includes(searchTerm.toLowerCase());
+      String(loc).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sighting.description.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesVisibility = visibilityFilter === 'all' || sighting.visibilityLevel === visibilityFilter;
+    const sightingVisibility = (sighting.visibility >= 8) ? 'Very Clear' : (sighting.visibility >=5 ? 'Clear' : 'Faint');
+    const matchesVisibility = visibilityFilter === 'all' || sightingVisibility === visibilityFilter;
     
     return matchesSearch && matchesVisibility;
   });
@@ -92,11 +96,11 @@ export function BrowseGhosts({ sightings }: BrowseGhostsProps) {
               <CardHeader>
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                   <CardTitle className="text-lg flex items-start space-x-2">
-                    <span>{sighting.ghostType}</span>
+                    <span>{(sighting as any).ghostName || 'Unknown'}</span>
                   </CardTitle>
-                  <Badge className={getVisibilityColor(sighting.visibilityLevel)}>
+                  <Badge className={getVisibilityColor((sighting.visibility >= 8) ? 'Very Clear' : (sighting.visibility >=5 ? 'Clear' : 'Faint'))}>
                     <Eye className="w-3 h-3 mr-1" />
-                    {sighting.visibilityLevel}
+                    {(sighting.visibility >= 8) ? 'Very Clear' : (sighting.visibility >=5 ? 'Clear' : 'Faint')}
                   </Badge>
                 </div>
               </CardHeader>
@@ -105,15 +109,15 @@ export function BrowseGhosts({ sightings }: BrowseGhostsProps) {
                 <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center space-x-1">
                     <MapPin className="w-4 h-4" />
-                    <span>{sighting.location}</span>
+                    <span>{(sighting.latitude !== null && sighting.longitude !== null) ? `${sighting.latitude}, ${sighting.longitude}` : 'Unknown location'}</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <Clock className="w-4 h-4" />
-                    <span>{sighting.timeOfSighting}</span>
+                    <span>{sighting.time ? new Date(sighting.time).toLocaleString() : 'Unknown time'}</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <User className="w-4 h-4" />
-                    <span>Reported by {sighting.username}</span>
+                    <span>Reported by User #{sighting.userReportID}</span>
                   </div>
                 </div>
                 
@@ -122,8 +126,8 @@ export function BrowseGhosts({ sightings }: BrowseGhostsProps) {
                 </p>
                 
                 <div className="text-xs text-muted-foreground pt-2 border-t">
-                  Submitted on {new Date(sighting.timestamp).toLocaleDateString()} at{' '}
-                  {new Date(sighting.timestamp).toLocaleTimeString()}
+                  Submitted on {sighting.time ? new Date(sighting.time).toLocaleDateString() : 'Unknown'} at{' '}
+                  {sighting.time ? new Date(sighting.time).toLocaleTimeString() : ''}
                 </div>
               </CardContent>
             </Card>

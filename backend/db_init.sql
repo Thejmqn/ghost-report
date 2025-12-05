@@ -21,6 +21,7 @@ CREATE TABLE Sighting (
     userReportID INT,
     latitude DECIMAL(11, 8),
     longitude DECIMAL(11, 8),
+    description VARCHAR(512),
     FOREIGN KEY (userReportID) REFERENCES User(id)
 );
 
@@ -106,12 +107,14 @@ INSERT INTO Ghost_Buster (userID, ghosts_busted, alias) VALUES
 (3, 23, 'Ectoplasm Expert'),
 (4, 89, 'Phantom Finder');
 
-INSERT INTO Sighting (visibility, time, userReportID, latitude, longitude) VALUES 
-(8, '2024-10-31 23:45:00', 1, 40.7128, -74.0060),
-(5, '2024-11-01 02:30:00', 2, 51.5074, -0.1278),
-(9, '2024-11-02 00:15:00', 3, 34.0522, -118.2437),
-(3, '2024-11-03 03:20:00', 4, 41.8781, -87.6298),
-(7, '2024-11-04 01:00:00', 5, 29.7604, -95.3698);
+INSERT INTO Sighting (visibility, time, userReportID, latitude, longitude, description) VALUES 
+(8, '2024-10-31 23:45:00', 1, 40.7128, -74.0060, 'Saw a shadowy figure near the old church, it vanished when I approached.'),
+(5, '2024-11-01 02:30:00', 2, 51.5074, -0.1278, 'spooky ghostly apparition floating above the cemetery gates.'),
+(7, '2024-11-01 22:15:00', 3, 34.0522, -118.2437, 'Heard eerie whispers and saw flickering lights in the abandoned hospital.'),
+(6, '2024-11-02 01:45:00', 4, 41.8781, -87.6298, 'A cold breeze passed through me as I saw a figure in old-fashioned clothing.'),
+(4, '2024-11-02 03:30:00', 5, 29.7604, -95.3698, 'Noticed strange orbs of light floating around the haunted bridge at midnight.'),
+(10, '2024-11-03 00:00:00', 1, 40.7128, -74.0060, 'A full-bodied apparition appeared and interacted with me briefly before disappearing.'),
+(2, '2024-11-03 04:45:00', 2, 51.5074, -0.1278, 'Felt an overwhelming presence but saw nothing visible.');
 
 INSERT INTO Ghost (type, name, description, visibility) VALUES 
 ('Poltergeist', 'The Knocker', 'A mischievous spirit known for rapping on walls and moving objects in abandoned warehouses', 3),
