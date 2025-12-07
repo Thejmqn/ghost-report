@@ -507,3 +507,37 @@ app.post('/api/sightings/:sightingId/comments', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// PUT update ghost name for a sighting (updates the first linked ghost)
+app.put('/api/sightings/:sightingId/ghost-name', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const sightingId = req.params.sightingId;
+    const { newName } = req.body || {};
+
+    if (!newName || typeof newName !== 'string') {
+      return res.status(400).json({ error: 'newName is required' });
+    }
+
+    // Find a ghost linked to this sighting
+    const linked = await dbClient.query('SELECT ghostID FROM Sighting_Reports_Ghost WHERE sightingID = ? LIMIT 1', [sightingId]);
+    if (!linked || linked.length === 0) {
+      return res.status(404).json({ error: 'no_ghost_linked' });
+    }
+
+    const ghostId = linked[0].ghostID || linked[0].ghostId || linked[0].id;
+    if (!ghostId) return res.status(500).json({ error: 'invalid_ghost_id' });
+
+    // Update the ghost name
+    if (dbClient.type === 'mysql') {
+      await dbClient.run('UPDATE `Ghost` SET `name` = ? WHERE id = ?', [newName, ghostId]);
+    } else {
+      await dbClient.run('UPDATE Ghost SET name = ? WHERE id = ?', [newName, ghostId]);
+    }
+
+    return res.json({ success: true, ghostId, newName });
+  } catch (err) {
+    console.error('Error updating ghost name:', err);
+    return res.status(500).json({ error: 'internal' });
+  }
+});

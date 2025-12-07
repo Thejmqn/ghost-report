@@ -25,6 +25,9 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
   const [newComment, setNewComment] = useState('');
   const [loadingComments, setLoadingComments] = useState(true);
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [ghostName, setGhostName] = useState<string>((sighting as any).ghostName || 'Unknown Ghost');
+  const [newGhostName, setNewGhostName] = useState<string>('');
+  const [updatingGhost, setUpdatingGhost] = useState(false);
 
   useEffect(() => {
     fetchComments();
@@ -112,7 +115,7 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
             <CardTitle className="text-2xl">
-              {(sighting as any).ghostName || 'Unknown Ghost'}
+              {ghostName}
             </CardTitle>
             <Badge className={getVisibilityColor(sighting.visibility)}>
               <Eye className="w-3 h-3 mr-1" />
@@ -146,6 +149,47 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
             <p className="text-foreground leading-relaxed whitespace-pre-wrap">
               {sighting.description}
             </p>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">New Ghost Name</label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={newGhostName}
+                  onChange={(e) => setNewGhostName(e.target.value)}
+                  placeholder="Enter new ghost name"
+                  className="input input-bordered flex-1 p-2 rounded border bg-background text-foreground"
+                  disabled={updatingGhost}
+                />
+                <Button
+                  onClick={async () => {
+                    if (!newGhostName.trim()) return;
+                    setUpdatingGhost(true);
+                    try {
+                      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+                      const resp = await fetch(`${apiBase}/api/sightings/${sighting.id}/ghost-name`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ newName: newGhostName })
+                      });
+                      if (resp.ok) {
+                        setGhostName(newGhostName);
+                        setNewGhostName('');
+                      } else {
+                        const err = await resp.json().catch(() => ({}));
+                        console.error('Failed updating ghost name:', err);
+                      }
+                    } catch (err) {
+                      console.error('Error updating ghost name:', err);
+                    } finally {
+                      setUpdatingGhost(false);
+                    }
+                  }}
+                  disabled={updatingGhost || !newGhostName.trim()}
+                >
+                  {updatingGhost ? 'Updating...' : 'Update Ghost'}
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
