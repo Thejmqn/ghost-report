@@ -100,6 +100,13 @@ export default function App() {
     localStorage.removeItem('ghostapp_user');
   };
 
+  const handleScreenChange = (screen: Screen) => {
+    setCurrentScreen(screen);
+    // Clear detail views when navigating to a different screen
+    setSelectedSighting(null);
+    setSelectedGhost(null);
+  };
+
   const handleSubmitSighting = (sightingData: GhostSighting) => {
     // Accept a full GhostSighting (from backend) and prepend to list
     console.log('Adding new sighting:', sightingData);
@@ -229,7 +236,7 @@ export default function App() {
     <div className="min-h-screen bg-background">
       <Navigation
         currentScreen={currentScreen}
-        onScreenChange={setCurrentScreen}
+        onScreenChange={handleScreenChange}
         user={user}
         onLogout={handleLogout}
       />
