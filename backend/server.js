@@ -669,3 +669,196 @@ app.put('/api/sightings/:sightingId/ghost-name', async (req, res) => {
     return res.status(500).json({ error: 'internal' });
   }
 });
+
+// Add these endpoints to your server.js file, before app.listen()
+
+// GET all tours with ghost count, signup count, and user signup status
+app.get('/api/tours', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const userId = req.query.userId;
+
+    const sql = `
+      SELECT 
+        T.id, 
+        T.startTime, 
+        T.endTime, 
+        T.guide, 
+        T.path,
+        (SELECT COUNT(*) FROM Tour_Includes TI WHERE TI.tourID = T.id) AS ghostCount,
+        (SELECT COUNT(*) FROM Tour_Sign_Up TSU WHERE TSU.tourID = T.id) AS signupCount,
+        ${userId ? `(SELECT COUNT(*) FROM Tour_Sign_Up TSU2 WHERE TSU2.tourID = T.id AND TSU2.userID = ?) AS isSignedUp` : '0 AS isSignedUp'}
+      FROM Tour T
+      ORDER BY T.startTime DESC
+    `;
+
+    const params = userId ? [userId] : [];
+    const rows = await dbClient.query(sql, params);
+
+    const mapped = (rows || []).map((r) => ({
+      id: String(r.id),
+      startTime: r.startTime,
+      endTime: r.endTime,
+      guide: r.guide || 'Unknown Guide',
+      path: r.path || '',
+      ghostCount: Number(r.ghostCount || 0),
+      signupCount: Number(r.signupCount || 0),
+      isSignedUp: Number(r.isSignedUp || 0) > 0
+    }));
+
+    res.json(mapped);
+  } catch (err) {
+    console.error('Error fetching tours:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// POST create a new tour
+app.post('/api/tours', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const { guide, path, startTime, endTime, ghostIDs } = req.body || {};
+
+    if (!guide || !path || !startTime || !endTime) {
+      return res.status(400).json({ error: 'guide, path, startTime, and endTime are required' });
+    }
+
+    if (!ghostIDs || !Array.isArray(ghostIDs) || ghostIDs.length === 0) {
+      return res.status(400).json({ error: 'at least one ghost must be selected' });
+    }
+
+    // Insert tour
+    let tourId;
+    if (dbClient.type === 'mysql') {
+      const result = await dbClient.run(
+        'INSERT INTO Tour (startTime, endTime, guide, path) VALUES (?, ?, ?, ?)',
+        [startTime, endTime, guide, path]
+      );
+      tourId = result.insertId;
+    } else {
+      const result = await dbClient.run(
+        'INSERT INTO Tour (startTime, endTime, guide, path) VALUES (?, ?, ?, ?)',
+        [startTime, endTime, guide, path]
+      );
+      tourId = result.lastID;
+    }
+
+    // Insert ghost associations
+    for (const ghostID of ghostIDs) {
+      await dbClient.run(
+        'INSERT INTO Tour_Includes (tourID, ghostID) VALUES (?, ?)',
+        [tourId, ghostID]
+      );
+    }
+
+    res.status(201).json({ id: tourId, guide, path, startTime, endTime });
+  } catch (err) {
+    console.error('Error creating tour:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// GET ghosts for a specific tour
+app.get('/api/tours/:tourId/ghosts', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const tourId = req.params.tourId;
+
+    const sql = `
+      SELECT G.id, G.type, G.name, G.description, G.visibility
+      FROM Ghost G
+      INNER JOIN Tour_Includes TI ON G.id = TI.ghostID
+      WHERE TI.tourID = ?
+    `;
+
+    const rows = await dbClient.query(sql, [tourId]);
+    res.json(rows || []);
+  } catch (err) {
+    console.error('Error fetching tour ghosts:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// GET participants for a specific tour
+app.get('/api/tours/:tourId/participants', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const tourId = req.params.tourId;
+
+    const sql = `
+      SELECT U.id, U.username
+      FROM User U
+      INNER JOIN Tour_Sign_Up TSU ON U.id = TSU.userID
+      WHERE TSU.tourID = ?
+    `;
+
+    const rows = await dbClient.query(sql, [tourId]);
+    
+    const mapped = (rows || []).map((r) => ({
+      id: String(r.id),
+      username: r.username || 'Unknown'
+    }));
+
+    res.json(mapped);
+  } catch (err) {
+    console.error('Error fetching tour participants:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// POST join a tour
+app.post('/api/tours/:tourId/join', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const tourId = req.params.tourId;
+    const { userID } = req.body || {};
+
+    if (!userID) {
+      return res.status(400).json({ error: 'userID is required' });
+    }
+
+    // Check if already signed up
+    const existing = await dbClient.query(
+      'SELECT * FROM Tour_Sign_Up WHERE userID = ? AND tourID = ?',
+      [userID, tourId]
+    );
+
+    if (existing && existing.length > 0) {
+      return res.status(200).json({ message: 'already_signed_up' });
+    }
+
+    // Sign up for tour
+    await dbClient.run(
+      'INSERT INTO Tour_Sign_Up (userID, tourID) VALUES (?, ?)',
+      [userID, tourId]
+    );
+
+    res.status(201).json({ userID, tourID: tourId });
+  } catch (err) {
+    console.error('Error joining tour:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// DELETE leave a tour
+app.delete('/api/tours/:tourId/leave', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const tourId = req.params.tourId;
+    const { userID } = req.body || {};
+
+    if (!userID) {
+      return res.status(400).json({ error: 'userID is required' });
+    }
+
+    await dbClient.run(
+      'DELETE FROM Tour_Sign_Up WHERE userID = ? AND tourID = ?',
+      [userID, tourId]
+    );
+
+    res.json({ message: 'left_tour' });
+  } catch (err) {
+    console.error('Error leaving tour:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});

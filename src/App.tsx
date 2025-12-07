@@ -4,24 +4,21 @@ import { Navigation } from './components/Navigation';
 import { ReportGhost } from './components/ReportGhost';
 import { BrowseGhosts } from './components/BrowseGhosts';
 import { BrowseGhostsPage } from './components/BrowseGhostsPage';
+import { ToursPage } from './components/ToursPage';
+import { CreateTour } from './components/CreateTour';
+import { TourDetail } from './components/TourDetail';
 import { UserProfile } from './components/UserProfile';
 import { SightingDetail } from './components/SightingDetail';
 import { GhostDetail } from './components/GhostDetail';
-import { User, GhostSighting, Screen } from './types';
-
-interface Ghost {
-  id: number;
-  type: string;
-  name: string;
-  description: string;
-  visibility: number;
-}
+import { User, GhostSighting, Screen, Tour, Ghost } from './types';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentScreen, setCurrentScreen] = useState<Screen>('report');
   const [selectedSighting, setSelectedSighting] = useState<GhostSighting | null>(null);
   const [selectedGhost, setSelectedGhost] = useState<Ghost | null>(null);
+  const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
+  const [showCreateTour, setShowCreateTour] = useState(false);
   const [ghostSightings, setGhostSightingsState] = useState<GhostSighting[]>([]);
   const [loadingSightings, setLoadingSightings] = useState(false);
   const [errorLoadingSightings, setErrorLoadingSightings] = useState<string | null>(null);
@@ -105,6 +102,8 @@ export default function App() {
     // Clear detail views when navigating to a different screen
     setSelectedSighting(null);
     setSelectedGhost(null);
+    setSelectedTour(null);
+    setShowCreateTour(false);
   };
 
   const handleSubmitSighting = (sightingData: GhostSighting) => {
@@ -146,6 +145,27 @@ export default function App() {
     setSelectedGhost(null);
   };
 
+  const handleSelectTour = (tour: Tour) => {
+    setSelectedTour(tour);
+  };
+
+  const handleBackFromTourDetail = () => {
+    setSelectedTour(null);
+  };
+
+  const handleCreateTour = () => {
+    setShowCreateTour(true);
+  };
+
+  const handleBackFromCreateTour = () => {
+    setShowCreateTour(false);
+  };
+
+  const handleTourCreated = () => {
+    setShowCreateTour(false);
+    // Tours page will refresh automatically
+  };
+
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -163,6 +183,29 @@ export default function App() {
   const userSightings = ghostSightings.filter(sighting => sighting.userReportID === user.id);
 
   const renderCurrentScreen = () => {
+    // If creating a tour, show that form
+    if (showCreateTour) {
+      return (
+        <CreateTour
+          user={user}
+          onBack={handleBackFromCreateTour}
+          onTourCreated={handleTourCreated}
+        />
+      );
+    }
+
+    // If viewing a tour detail, show that
+    if (selectedTour) {
+      return (
+        <TourDetail
+          tour={selectedTour}
+          user={user}
+          onBack={handleBackFromTourDetail}
+          onSelectGhost={handleSelectGhost}
+        />
+      );
+    }
+
     // If viewing a sighting detail, show that instead (takes priority)
     if (selectedSighting) {
       return (
@@ -218,6 +261,14 @@ export default function App() {
         return <BrowseGhosts sightings={ghostSightings} onSelectSighting={handleSelectSighting} />;
       case 'ghosts':
         return <BrowseGhostsPage onSelectGhost={handleSelectGhost} />;
+      case 'tours':
+        return (
+          <ToursPage
+            user={user}
+            onSelectTour={handleSelectTour}
+            onCreateTour={handleCreateTour}
+          />
+        );
       case 'profile':
         return (
           <UserProfile

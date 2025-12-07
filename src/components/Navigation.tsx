@@ -1,6 +1,6 @@
 import { Button } from './ui/button';
 import { Screen, User } from '../types';
-import { Ghost, FileText, Search, User as UserIcon, LogOut, Flame } from 'lucide-react';
+import { Ghost, FileText, Search, User as UserIcon, LogOut, Flame, MapPin } from 'lucide-react';
 
 interface NavigationProps {
   currentScreen: Screen;
@@ -14,6 +14,7 @@ export function Navigation({ currentScreen, onScreenChange, user, onLogout }: Na
     { screen: 'report' as Screen, label: 'Report Ghost', icon: FileText },
     { screen: 'browse' as Screen, label: 'Browse Sightings', icon: Search },
     { screen: 'ghosts' as Screen, label: 'Ghosts', icon: Ghost },
+    { screen: 'tours' as Screen, label: 'Tours', icon: MapPin },
     { screen: 'profile' as Screen, label: 'My Profile', icon: UserIcon }
   ];
 
