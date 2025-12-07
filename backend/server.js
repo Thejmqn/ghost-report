@@ -508,6 +508,57 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
+// GET ghost buster status for a user
+app.get('/api/users/:id/ghost-buster', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const userId = req.params.id;
+    const rows = await dbClient.query('SELECT userID, ghosts_busted, alias FROM Ghost_Buster WHERE userID = ?', [userId]);
+    if (!rows || rows.length === 0) return res.status(404).json({ error: 'not_a_ghost_buster' });
+    const r = rows[0];
+    return res.json({ isGhostBuster: true, ghosts_busted: Number(r.ghosts_busted || 0), alias: r.alias || null });
+  } catch (err) {
+    console.error('Error fetching ghost buster status:', err);
+    return res.status(500).json({ error: 'internal' });
+  }
+});
+
+// PUT toggle ghost buster status for a user
+app.put('/api/users/:id/ghost-buster', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const userId = req.params.id;
+    const { isGhostBuster } = req.body || {};
+
+    if (typeof isGhostBuster !== 'boolean') return res.status(400).json({ error: 'isGhostBuster boolean required' });
+
+    if (isGhostBuster) {
+      // create if not exists
+      const existing = await dbClient.query('SELECT userID, ghosts_busted, alias FROM Ghost_Buster WHERE userID = ?', [userId]);
+      if (existing && existing.length > 0) {
+        const e = existing[0];
+        return res.json({ isGhostBuster: true, ghosts_busted: Number(e.ghosts_busted || 0), alias: e.alias || null });
+      }
+
+      // Insert with defaults: ghosts_busted = 0, alias = NULL
+      if (dbClient.type === 'mysql') {
+        await dbClient.run('INSERT INTO `Ghost_Buster` (userID, ghosts_busted, alias) VALUES (?, ?, ?)', [userId, 0, null]);
+      } else {
+        await dbClient.run('INSERT INTO Ghost_Buster (userID, ghosts_busted, alias) VALUES (?, ?, ?)', [userId, 0, null]);
+      }
+
+      return res.status(201).json({ isGhostBuster: true, ghosts_busted: 0, alias: null });
+    } else {
+      // remove entry if exists
+      await dbClient.run('DELETE FROM Ghost_Buster WHERE userID = ?', [userId]);
+      return res.json({ isGhostBuster: false });
+    }
+  } catch (err) {
+    console.error('Error toggling ghost buster status:', err);
+    return res.status(500).json({ error: 'internal' });
+  }
+});
+
 // PUT update ghost name for a sighting (updates the first linked ghost)
 app.put('/api/sightings/:sightingId/ghost-name', async (req, res) => {
   try {
@@ -538,6 +589,76 @@ app.put('/api/sightings/:sightingId/ghost-name', async (req, res) => {
     return res.json({ success: true, ghostId, newName });
   } catch (err) {
     console.error('Error updating ghost name:', err);
+    return res.status(500).json({ error: 'internal' });
+  }
+});
+
+// GET list of ghosts the user is fighting
+app.get('/api/users/:id/fights', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const userId = req.params.id;
+    const rows = await dbClient.query('SELECT ghostID FROM Ghost_Buster_Fights_Ghost WHERE userID = ?', [userId]);
+    const ghostIds = (rows || []).map(r => r.ghostID || r.ghostId || r.id).filter(Boolean);
+    return res.json({ fighting: ghostIds });
+  } catch (err) {
+    console.error('Error fetching fights:', err);
+    return res.status(500).json({ error: 'internal' });
+  }
+});
+
+// PUT toggle fighting a ghost for a user
+app.put('/api/users/:id/fights/:ghostId', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const userId = req.params.id;
+    const ghostId = req.params.ghostId;
+    const { fighting } = req.body || {};
+
+    if (typeof fighting !== 'boolean') return res.status(400).json({ error: 'fighting boolean required' });
+
+    if (fighting) {
+      // insert if not exists
+      const existing = await dbClient.query('SELECT * FROM Ghost_Buster_Fights_Ghost WHERE userID = ? AND ghostID = ?', [userId, ghostId]);
+      if (existing && existing.length > 0) {
+        return res.json({ fighting: true, ghostId, userId });
+      }
+      await dbClient.run('INSERT INTO Ghost_Buster_Fights_Ghost (userID, ghostID) VALUES (?, ?)', [userId, ghostId]);
+      return res.status(201).json({ fighting: true, ghostId, userId });
+    } else {
+      // remove
+      await dbClient.run('DELETE FROM Ghost_Buster_Fights_Ghost WHERE userID = ? AND ghostID = ?', [userId, ghostId]);
+      return res.json({ fighting: false, ghostId, userId });
+    }
+  } catch (err) {
+    console.error('Error toggling fight:', err);
+    return res.status(500).json({ error: 'internal' });
+  }
+});
+
+// PUT update alias for a ghost buster (creates row if missing)
+app.put('/api/users/:id/ghost-buster/alias', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const userId = req.params.id;
+    const { alias } = req.body || {};
+
+    if (alias !== null && alias !== undefined && typeof alias !== 'string') {
+      return res.status(400).json({ error: 'alias must be a string or null' });
+    }
+
+    const existing = await dbClient.query('SELECT userID FROM Ghost_Buster WHERE userID = ?', [userId]);
+    if (existing && existing.length > 0) {
+      // update
+      await dbClient.run('UPDATE Ghost_Buster SET alias = ? WHERE userID = ?', [alias, userId]);
+      return res.json({ alias: alias ?? null });
+    } else {
+      // create a new ghost buster row with default ghosts_busted=0
+      await dbClient.run('INSERT INTO Ghost_Buster (userID, ghosts_busted, alias) VALUES (?, ?, ?)', [userId, 0, alias || null]);
+      return res.status(201).json({ alias: alias || null });
+    }
+  } catch (err) {
+    console.error('Error updating ghost buster alias:', err);
     return res.status(500).json({ error: 'internal' });
   }
 });
