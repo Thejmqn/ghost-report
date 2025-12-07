@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { User } from '../types';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
@@ -13,18 +12,11 @@ interface Ghost {
   visibility: number;
 }
 
-interface BrowseGhostsPageProps {
-  user: User | null;
-}
-
-export function BrowseGhostsPage({ user }: BrowseGhostsPageProps) {
+export function BrowseGhostsPage() {
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isGhostBuster, setIsGhostBuster] = useState(false);
-  const [fightingSet, setFightingSet] = useState<Record<number, boolean>>({});
-  const [toggling, setToggling] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const fetchGhosts = async () => {
@@ -36,27 +28,6 @@ export function BrowseGhostsPage({ user }: BrowseGhostsPageProps) {
         }
         const data = await resp.json();
         setGhosts(data || []);
-        // If user present, fetch their fights and ghost-buster status
-        if (user) {
-          try {
-            const gbResp = await fetch(`${apiBase}/api/users/${user.id}/ghost-buster`);
-            setIsGhostBuster(gbResp.ok);
-          } catch (e) {
-            setIsGhostBuster(false);
-          }
-
-          try {
-            const fightsResp = await fetch(`${apiBase}/api/users/${user.id}/fights`);
-            if (fightsResp.ok) {
-              const fdata = await fightsResp.json();
-              const map: Record<number, boolean> = {};
-              (fdata.fighting || []).forEach((gid: any) => { map[Number(gid)] = true; });
-              setFightingSet(map);
-            }
-          } catch (e) {
-            console.error('Error fetching user fights', e);
-          }
-        }
       } catch (err) {
         console.error('Error fetching ghosts:', err);
         setError(err instanceof Error ? err.message : 'Failed to load ghosts');
@@ -66,29 +37,7 @@ export function BrowseGhostsPage({ user }: BrowseGhostsPageProps) {
     };
 
     fetchGhosts();
-  }, [user]);
-
-  const toggleFight = async (ghostId: number, shouldFight: boolean) => {
-    if (!user) return;
-    setToggling(prev => ({ ...prev, [ghostId]: true }));
-    try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
-      const resp = await fetch(`${apiBase}/api/users/${user.id}/fights/${ghostId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fighting: shouldFight })
-      });
-      if (resp.ok) {
-        setFightingSet(prev => ({ ...prev, [ghostId]: shouldFight }));
-      } else {
-        console.error('Failed to toggle fight for ghost', ghostId);
-      }
-    } catch (e) {
-      console.error('Error toggling fight', e);
-    } finally {
-      setToggling(prev => ({ ...prev, [ghostId]: false }));
-    }
-  };
+  }, []);
 
   const filteredGhosts = ghosts.filter(ghost => {
     const matchesSearch = 
@@ -200,19 +149,6 @@ export function BrowseGhostsPage({ user }: BrowseGhostsPageProps) {
                   <p className="text-xs text-muted-foreground">
                     Visibility Rating: {ghost.visibility}/10
                   </p>
-
-                  {isGhostBuster && (
-                    <div className="mt-2 flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={!!fightingSet[ghost.id]}
-                        disabled={!!toggling[ghost.id]}
-                        onChange={(e) => toggleFight(ghost.id, e.target.checked)}
-                        className="w-4 h-4"
-                      />
-                      <label className="text-sm text-muted-foreground">Fighting this ghost</label>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>

@@ -1,4 +1,4 @@
-import { useState, ChangeEvent, useEffect } from 'react';
+import { useState, ChangeEvent } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -20,39 +20,6 @@ interface UserProfileProps {
 export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSighting }: UserProfileProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Omit<GhostSighting, 'time'>> & { time?: string | Date | null }>({});
-  const [isGhostBuster, setIsGhostBuster] = useState<boolean | null>(null);
-  const [gbAlias, setGbAlias] = useState<string | null>(null);
-  const [gbGhostsBusted, setGbGhostsBusted] = useState<number | null>(null);
-  const [gbLoading, setGbLoading] = useState(true);
-  const [gbToggling, setGbToggling] = useState(false);
-  const [gbSaving, setGbSaving] = useState(false);
-
-  useEffect(() => {
-    const fetchGb = async () => {
-      setGbLoading(true);
-      try {
-        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
-        const resp = await fetch(`${apiBase}/api/users/${user.id}/ghost-buster`);
-        if (resp.ok) {
-          const data = await resp.json();
-          setIsGhostBuster(Boolean(data.isGhostBuster));
-          setGbAlias(data.alias ?? null);
-          setGbGhostsBusted(typeof data.ghosts_busted === 'number' ? data.ghosts_busted : null);
-        } else if (resp.status === 404) {
-          setIsGhostBuster(false);
-          setGbAlias(null);
-          setGbGhostsBusted(null);
-        } else {
-          console.error('Failed to fetch ghost buster status');
-        }
-      } catch (err) {
-        console.error('Error fetching ghost buster:', err);
-      } finally {
-        setGbLoading(false);
-      }
-    };
-    fetchGb();
-  }, [user.id]);
 
   const startEditing = (sighting: GhostSighting) => {
     setEditingId(sighting.id);
@@ -112,85 +79,6 @@ export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSig
               <div>
                 <p className="text-sm text-muted-foreground">Email</p>
                 <p>{user.email}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Certified Ghost Buster</p>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={!!isGhostBuster}
-                    disabled={gbLoading || gbToggling}
-                    onChange={async (e) => {
-                      const shouldBe = e.target.checked;
-                      setGbToggling(true);
-                      try {
-                        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
-                        const resp = await fetch(`${apiBase}/api/users/${user.id}/ghost-buster`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ isGhostBuster: shouldBe })
-                        });
-                        if (resp.ok) {
-                          const data = await resp.json();
-                          setIsGhostBuster(Boolean(data.isGhostBuster));
-                          setGbAlias(data.alias ?? null);
-                          setGbGhostsBusted(typeof data.ghosts_busted === 'number' ? data.ghosts_busted : 0);
-                        } else {
-                          console.error('Failed to update ghost buster status');
-                        }
-                      } catch (err) {
-                        console.error('Error toggling ghost buster:', err);
-                      } finally {
-                        setGbToggling(false);
-                      }
-                    }}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {gbLoading ? 'loading...' : (isGhostBuster ? 'Yes — certified' : 'No')}
-                  </span>
-                </div>
-
-                {isGhostBuster && !gbLoading && (
-                  <div className="space-y-2">
-                    <p className="text-sm text-foreground mt-2">You are a certified Ghost Buster{gbAlias ? ` (alias: ${gbAlias})` : ''}. Ghosts busted: {gbGhostsBusted ?? 0}.</p>
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        value={gbAlias ?? ''}
-                        onChange={(e) => setGbAlias(e.target.value)}
-                        placeholder="Set your ghost-buster alias"
-                        className="max-w-xs"
-                        disabled={gbSaving}
-                      />
-                      <Button
-                        onClick={async () => {
-                          setGbSaving(true);
-                          try {
-                            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
-                            const resp = await fetch(`${apiBase}/api/users/${user.id}/ghost-buster/alias`, {
-                              method: 'PUT',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ alias: (gbAlias && gbAlias.length > 0) ? gbAlias : null })
-                            });
-                            if (resp.ok) {
-                              const data = await resp.json();
-                              setGbAlias(data.alias ?? null);
-                            } else {
-                              console.error('Failed to save alias');
-                            }
-                          } catch (err) {
-                            console.error('Error saving alias:', err);
-                          } finally {
-                            setGbSaving(false);
-                          }
-                        }}
-                        disabled={gbSaving}
-                      >
-                        {gbSaving ? 'Saving...' : 'Save Alias'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Sightings</p>
