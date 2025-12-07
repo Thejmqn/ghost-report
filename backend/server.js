@@ -227,6 +227,134 @@ app.get('/api/ghosts', async (req, res) => {
   }
 });
 
+// Add these endpoints to your server.js file, before app.listen()
+
+// GET sightings for a specific ghost
+app.get('/api/ghosts/:ghostId/sightings', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const ghostId = req.params.ghostId;
+    
+    const sql = `SELECT S.id, S.visibility, S.time, S.userReportID, S.latitude, S.longitude, S.description, U.username
+                 FROM Sighting S
+                 INNER JOIN Sighting_Reports_Ghost SRG ON S.id = SRG.sightingID
+                 LEFT JOIN User U ON S.userReportID = U.id
+                 WHERE SRG.ghostID = ?
+                 ORDER BY S.time DESC`;
+    
+    const rows = await dbClient.query(sql, [ghostId]);
+    
+    const mapped = (rows || []).map((r) => ({
+      id: String(r.id),
+      visibility: Number(r.visibility || 0),
+      time: r.time ? new Date(r.time) : new Date(),
+      userReportID: String(r.userReportID || ''),
+      latitude: (r.latitude !== undefined && r.latitude !== null) ? Number(r.latitude) : null,
+      longitude: (r.longitude !== undefined && r.longitude !== null) ? Number(r.longitude) : null,
+      description: r.description || '',
+      username: r.username || 'Unknown'
+    }));
+    
+    res.json(mapped);
+  } catch (err) {
+    console.error('Error fetching ghost sightings:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// GET comments for a specific ghost
+app.get('/api/ghosts/:ghostId/comments', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const ghostId = req.params.ghostId;
+    
+    const sql = `SELECT GC.userID, GC.ghostID, GC.reportTime, GC.description, U.username
+                 FROM Ghost_Comment GC
+                 LEFT JOIN User U ON GC.userID = U.id
+                 WHERE GC.ghostID = ?
+                 ORDER BY GC.reportTime ASC`;
+    
+    const rows = await dbClient.query(sql, [ghostId]);
+    
+    const comments = (rows || []).map((r) => ({
+      userID: String(r.userID),
+      ghostID: String(r.ghostID),
+      reportTime: r.reportTime,
+      description: r.description || '',
+      username: r.username || `User ${r.userID}`
+    }));
+    
+    res.json(comments);
+  } catch (err) {
+    console.error('Error fetching ghost comments:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// POST a comment on a ghost
+app.post('/api/ghosts/:ghostId/comments', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const ghostId = req.params.ghostId;
+    const { userID, description } = req.body || {};
+    
+    if (!userID || !description) {
+      return res.status(400).json({ error: 'userID and description are required' });
+    }
+    
+    // Check if this user has already commented on this ghost
+    // According to schema, PRIMARY KEY (userID, ghostID) means one comment per user per ghost
+    const existing = await dbClient.query(
+      'SELECT * FROM Ghost_Comment WHERE userID = ? AND ghostID = ?',
+      [userID, ghostId]
+    );
+    
+    if (existing && existing.length > 0) {
+      // User already commented, update the existing comment
+      if (dbClient.type === 'mysql') {
+        await dbClient.run(
+          'UPDATE Ghost_Comment SET description = ?, reportTime = NOW() WHERE userID = ? AND ghostID = ?',
+          [description, userID, ghostId]
+        );
+      } else {
+        await dbClient.run(
+          'UPDATE Ghost_Comment SET description = ?, reportTime = datetime(\'now\') WHERE userID = ? AND ghostID = ?',
+          [description, userID, ghostId]
+        );
+      }
+      
+      return res.status(200).json({ 
+        userID, 
+        ghostID: ghostId, 
+        description,
+        message: 'Comment updated'
+      });
+    } else {
+      // Insert new comment
+      if (dbClient.type === 'mysql') {
+        await dbClient.run(
+          'INSERT INTO Ghost_Comment (userID, ghostID, reportTime, description) VALUES (?, ?, NOW(), ?)',
+          [userID, ghostId, description]
+        );
+      } else {
+        await dbClient.run(
+          'INSERT INTO Ghost_Comment (userID, ghostID, reportTime, description) VALUES (?, ?, datetime(\'now\'), ?)',
+          [userID, ghostId, description]
+        );
+      }
+      
+      return res.status(201).json({ 
+        userID, 
+        ghostID: ghostId, 
+        description 
+      });
+    }
+  } catch (err) {
+    console.error('Error posting ghost comment:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 // GET user by id
 app.get('/api/users/:id', async (req, res) => {
   try {

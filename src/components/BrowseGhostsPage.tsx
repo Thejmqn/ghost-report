@@ -12,7 +12,11 @@ interface Ghost {
   visibility: number;
 }
 
-export function BrowseGhostsPage() {
+interface BrowseGhostsPageProps {
+  onSelectGhost: (ghost: Ghost) => void;
+}
+
+export function BrowseGhostsPage({ onSelectGhost }: BrowseGhostsPageProps) {
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +122,11 @@ export function BrowseGhostsPage() {
       ) : (
         <div className="space-y-4">
           {filteredGhosts.map((ghost) => (
-            <Card key={ghost.id} className="hover:shadow-lg transition-shadow">
+            <Card 
+              key={ghost.id} 
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => onSelectGhost(ghost)}
+            >
               <CardHeader>
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                   <CardTitle className="text-lg flex items-center space-x-2">
@@ -147,7 +155,7 @@ export function BrowseGhostsPage() {
                 
                 <div className="pt-2 border-t">
                   <p className="text-xs text-muted-foreground">
-                    Visibility Rating: {ghost.visibility}/10
+                    Visibility Rating: {ghost.visibility}/10 • Click for details
                   </p>
                 </div>
               </CardContent>
