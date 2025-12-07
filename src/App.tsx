@@ -179,7 +179,7 @@ export default function App() {
         console.log('Rendering BrowseGhosts with sightings:', ghostSightings);
         return <BrowseGhosts sightings={ghostSightings} onSelectSighting={handleSelectSighting} />;
       case 'ghosts':
-        return <BrowseGhostsPage />;
+        return <BrowseGhostsPage user={user} />;
       case 'profile':
         return (
           <UserProfile
