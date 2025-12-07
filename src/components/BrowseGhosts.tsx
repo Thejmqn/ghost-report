@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 interface BrowseGhostsProps {
   sightings: GhostSighting[];
+  onSelectSighting: (sighting: GhostSighting) => void;
 }
 
-export function BrowseGhosts({ sightings }: BrowseGhostsProps) {
+export function BrowseGhosts({ sightings, onSelectSighting }: BrowseGhostsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [visibilityFilter, setVisibilityFilter] = useState('all');
 
@@ -92,7 +93,11 @@ export function BrowseGhosts({ sightings }: BrowseGhostsProps) {
       ) : (
         <div className="space-y-4">
           {filteredSightings.map((sighting) => (
-            <Card key={sighting.id} className="hover:shadow-lg transition-shadow">
+            <Card 
+              key={sighting.id} 
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => onSelectSighting(sighting)}
+            >
               <CardHeader>
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                   <CardTitle className="text-lg flex items-start space-x-2">

@@ -325,12 +325,6 @@ app.post('/api/sightings', async (req, res) => {
       );
       const sightingId = result.insertId;
 
-      // Insert comment linking user to this sighting
-      await dbClient.run(
-        'INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, NOW(), ?)', 
-        [reporter, sightingId, fullDescription]
-      );
-
       // Handle ghost association
       let finalGhostId = null;
       
@@ -376,11 +370,6 @@ app.post('/api/sightings', async (req, res) => {
       );
       const sightingId = result.lastID;
 
-      await dbClient.run(
-        'INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, datetime(\'now\'), ?)', 
-        [reporter, sightingId, fullDescription]
-      );
-
       // Handle ghost association
       let finalGhostId = null;
       
@@ -418,6 +407,99 @@ app.post('/api/sightings', async (req, res) => {
   } catch (err) {
     console.error('Create sighting error:', err);
     return res.status(500).json({ error: 'internal' });
+  }
+});
+
+// GET comments for a specific sighting
+app.get('/api/sightings/:sightingId/comments', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const sightingId = req.params.sightingId;
+    
+    const sql = `SELECT SC.userID, SC.sightingID, SC.reportTime, SC.description, U.username
+                 FROM Sighting_Comment SC
+                 LEFT JOIN User U ON SC.userID = U.id
+                 WHERE SC.sightingID = ?
+                 ORDER BY SC.reportTime ASC`;
+    
+    const rows = await dbClient.query(sql, [sightingId]);
+    
+    const comments = (rows || []).map((r) => ({
+      userID: String(r.userID),
+      sightingID: String(r.sightingID),
+      reportTime: r.reportTime,
+      description: r.description || '',
+      username: r.username || `User ${r.userID}`
+    }));
+    
+    res.json(comments);
+  } catch (err) {
+    console.error('Error fetching comments:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// POST a comment on a sighting
+app.post('/api/sightings/:sightingId/comments', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const sightingId = req.params.sightingId;
+    const { userID, description } = req.body || {};
+    
+    if (!userID || !description) {
+      return res.status(400).json({ error: 'userID and description are required' });
+    }
+    
+    // Check if this user has already commented on this sighting
+    // According to schema, PRIMARY KEY (userID, sightingID) means one comment per user per sighting
+    const existing = await dbClient.query(
+      'SELECT * FROM Sighting_Comment WHERE userID = ? AND sightingID = ?',
+      [userID, sightingId]
+    );
+    
+    if (existing && existing.length > 0) {
+      // User already commented, update the existing comment
+      if (dbClient.type === 'mysql') {
+        await dbClient.run(
+          'UPDATE Sighting_Comment SET description = ?, reportTime = NOW() WHERE userID = ? AND sightingID = ?',
+          [description, userID, sightingId]
+        );
+      } else {
+        await dbClient.run(
+          'UPDATE Sighting_Comment SET description = ?, reportTime = datetime(\'now\') WHERE userID = ? AND sightingID = ?',
+          [description, userID, sightingId]
+        );
+      }
+      
+      return res.status(200).json({ 
+        userID, 
+        sightingID: sightingId, 
+        description,
+        message: 'Comment updated'
+      });
+    } else {
+      // Insert new comment
+      if (dbClient.type === 'mysql') {
+        await dbClient.run(
+          'INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, NOW(), ?)',
+          [userID, sightingId, description]
+        );
+      } else {
+        await dbClient.run(
+          'INSERT INTO Sighting_Comment (userID, sightingID, reportTime, description) VALUES (?, ?, datetime(\'now\'), ?)',
+          [userID, sightingId, description]
+        );
+      }
+      
+      return res.status(201).json({ 
+        userID, 
+        sightingID: sightingId, 
+        description 
+      });
+    }
+  } catch (err) {
+    console.error('Error posting comment:', err);
+    res.status(500).json({ error: 'internal' });
   }
 });
 

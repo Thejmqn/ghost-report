@@ -4,14 +4,32 @@ import { Navigation } from './components/Navigation';
 import { ReportGhost } from './components/ReportGhost';
 import { BrowseGhosts } from './components/BrowseGhosts';
 import { UserProfile } from './components/UserProfile';
+import { SightingDetail } from './components/SightingDetail';
 import { User, GhostSighting, Screen } from './types';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentScreen, setCurrentScreen] = useState<Screen>('report');
+  const [selectedSighting, setSelectedSighting] = useState<GhostSighting | null>(null);
   const [ghostSightings, setGhostSightingsState] = useState<GhostSighting[]>([]);
   const [loadingSightings, setLoadingSightings] = useState(false);
   const [errorLoadingSightings, setErrorLoadingSightings] = useState<string | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check for stored user session on mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem('ghostapp_user');
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+      } catch (err) {
+        console.error('Error parsing stored user:', err);
+        localStorage.removeItem('ghostapp_user');
+      }
+    }
+    setIsCheckingAuth(false);
+  }, []);
 
   // Fetch sightings when component mounts
   useEffect(() => {
@@ -60,11 +78,15 @@ export default function App() {
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
+    // Store user in localStorage
+    localStorage.setItem('ghostapp_user', JSON.stringify(loggedInUser));
   };
 
   const handleLogout = () => {
     setUser(null);
     setCurrentScreen('report');
+    // Remove user from localStorage
+    localStorage.removeItem('ghostapp_user');
   };
 
   const handleSubmitSighting = (sightingData: GhostSighting) => {
@@ -89,6 +111,24 @@ export default function App() {
     setGhostSightingsState(prev => prev.filter(sighting => sighting.id !== id));
   };
 
+  const handleSelectSighting = (sighting: GhostSighting) => {
+    setSelectedSighting(sighting);
+  };
+
+  const handleBackFromDetail = () => {
+    setSelectedSighting(null);
+  };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -96,6 +136,17 @@ export default function App() {
   const userSightings = ghostSightings.filter(sighting => sighting.userReportID === user.id);
 
   const renderCurrentScreen = () => {
+    // If viewing a sighting detail, show that instead
+    if (selectedSighting) {
+      return (
+        <SightingDetail 
+          sighting={selectedSighting} 
+          user={user}
+          onBack={handleBackFromDetail}
+        />
+      );
+    }
+
     switch (currentScreen) {
       case 'report':
         return <ReportGhost user={user} onSubmitSighting={handleSubmitSighting} />;
@@ -125,7 +176,7 @@ export default function App() {
           );
         }
         console.log('Rendering BrowseGhosts with sightings:', ghostSightings);
-        return <BrowseGhosts sightings={ghostSightings} />;
+        return <BrowseGhosts sightings={ghostSightings} onSelectSighting={handleSelectSighting} />;
       case 'profile':
         return (
           <UserProfile

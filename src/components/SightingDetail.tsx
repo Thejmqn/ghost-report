@@ -1,0 +1,213 @@
+import { useState, useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Textarea } from './ui/textarea';
+import { GhostSighting, User } from '../types';
+import { MapPin, Clock, Eye, User as UserIcon, ArrowLeft, MessageSquare } from 'lucide-react';
+
+interface SightingComment {
+  userID: string;
+  sightingID: string;
+  reportTime: Date;
+  description: string;
+  username?: string;
+}
+
+interface SightingDetailProps {
+  sighting: GhostSighting;
+  user: User;
+  onBack: () => void;
+}
+
+export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) {
+  const [comments, setComments] = useState<SightingComment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [loadingComments, setLoadingComments] = useState(true);
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  useEffect(() => {
+    fetchComments();
+  }, [sighting.id]);
+
+  const fetchComments = async () => {
+    try {
+      setLoadingComments(true);
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+      const resp = await fetch(`${apiBase}/api/sightings/${sighting.id}/comments`);
+      
+      if (resp.ok) {
+        const data = await resp.json();
+        const transformedComments = data.map((c: any) => ({
+          userID: String(c.userID),
+          sightingID: String(c.sightingID),
+          reportTime: new Date(c.reportTime),
+          description: c.description || '',
+          username: c.username || `User ${c.userID}`
+        }));
+        setComments(transformedComments);
+      }
+    } catch (err) {
+      console.error('Error fetching comments:', err);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const handleSubmitComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+
+    setSubmittingComment(true);
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+      const resp = await fetch(`${apiBase}/api/sightings/${sighting.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userID: user.id,
+          description: newComment
+        })
+      });
+
+      if (resp.status === 201) {
+        setNewComment('');
+        // Refresh comments
+        await fetchComments();
+      } else {
+        const err = await resp.json().catch(() => ({}));
+        console.error('Error posting comment:', err);
+      }
+    } catch (err) {
+      console.error('Error submitting comment:', err);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const getVisibilityColor = (visibility: number) => {
+    if (visibility >= 8) return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+    if (visibility >= 5) return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
+    return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+  };
+
+  const getVisibilityLabel = (visibility: number) => {
+    if (visibility >= 8) return 'Very Clear';
+    if (visibility >= 5) return 'Clear';
+    return 'Faint';
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-4">
+      <Button 
+        variant="ghost" 
+        onClick={onBack}
+        className="mb-4"
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Sightings
+      </Button>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+            <CardTitle className="text-2xl">
+              {(sighting as any).ghostName || 'Unknown Ghost'}
+            </CardTitle>
+            <Badge className={getVisibilityColor(sighting.visibility)}>
+              <Eye className="w-3 h-3 mr-1" />
+              {getVisibilityLabel(sighting.visibility)}
+            </Badge>
+          </div>
+        </CardHeader>
+        
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div className="flex items-center space-x-2 text-muted-foreground">
+              <MapPin className="w-4 h-4" />
+              <span>
+                {(sighting.latitude !== null && sighting.longitude !== null) 
+                  ? `${sighting.latitude}, ${sighting.longitude}` 
+                  : 'Unknown location'}
+              </span>
+            </div>
+            <div className="flex items-center space-x-2 text-muted-foreground">
+              <Clock className="w-4 h-4" />
+              <span>{sighting.time ? new Date(sighting.time).toLocaleString() : 'Unknown time'}</span>
+            </div>
+            <div className="flex items-center space-x-2 text-muted-foreground">
+              <UserIcon className="w-4 h-4" />
+              <span>Reported by User #{sighting.userReportID}</span>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t">
+            <h3 className="font-semibold mb-2">Description</h3>
+            <p className="text-foreground leading-relaxed whitespace-pre-wrap">
+              {sighting.description}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <MessageSquare className="w-5 h-5" />
+            <span>Comments ({comments.length})</span>
+          </CardTitle>
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
+          {/* Add Comment Form */}
+          <form onSubmit={handleSubmitComment} className="space-y-3">
+            <Textarea
+              placeholder="Add your comment or observations..."
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              className="min-h-24"
+              disabled={submittingComment}
+            />
+            <Button 
+              type="submit" 
+              disabled={submittingComment || !newComment.trim()}
+            >
+              {submittingComment ? 'Posting...' : 'Post Comment'}
+            </Button>
+          </form>
+
+          {/* Comments List */}
+          <div className="space-y-4 pt-4 border-t">
+            {loadingComments ? (
+              <p className="text-center text-muted-foreground py-8">Loading comments...</p>
+            ) : comments.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">
+                No comments yet. Be the first to comment!
+              </p>
+            ) : (
+              comments.map((comment, index) => (
+                <div 
+                  key={`${comment.userID}-${comment.sightingID}-${index}`}
+                  className="bg-muted/50 rounded-lg p-4 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <UserIcon className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">{comment.username}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {comment.reportTime.toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {comment.description}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
