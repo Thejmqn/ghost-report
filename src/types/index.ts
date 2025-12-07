@@ -14,4 +14,4 @@ export interface GhostSighting {
   description: string;
 }
 
-export type Screen = 'login' | 'report' | 'browse' | 'profile';
+export type Screen = 'login' | 'report' | 'browse' | 'profile' | 'ghosts';

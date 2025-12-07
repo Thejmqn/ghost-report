@@ -1,6 +1,6 @@
 import { Button } from './ui/button';
 import { Screen, User } from '../types';
-import { Ghost, FileText, Search, User as UserIcon, LogOut } from 'lucide-react';
+import { Ghost, FileText, Search, User as UserIcon, LogOut, Flame } from 'lucide-react';
 
 interface NavigationProps {
   currentScreen: Screen;
@@ -11,8 +11,9 @@ interface NavigationProps {
 
 export function Navigation({ currentScreen, onScreenChange, user, onLogout }: NavigationProps) {
   const navItems = [
-    { screen: 'report' as Screen, label: 'Report Ghost', icon: Ghost },
+    { screen: 'report' as Screen, label: 'Report Ghost', icon: FileText },
     { screen: 'browse' as Screen, label: 'Browse Sightings', icon: Search },
+    { screen: 'ghosts' as Screen, label: 'Ghosts', icon: Ghost },
     { screen: 'profile' as Screen, label: 'My Profile', icon: UserIcon }
   ];
 
@@ -20,6 +21,7 @@ export function Navigation({ currentScreen, onScreenChange, user, onLogout }: Na
     <nav className="bg-card border-b border-border px-4 py-3">
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <div className="flex items-center space-x-1">
+          <Flame className="w-5 h-5 text-orange-500" />
           <h1 className="text-lg">Campus Ghost Reports</h1>
         </div>
         

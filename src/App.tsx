@@ -3,6 +3,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { Navigation } from './components/Navigation';
 import { ReportGhost } from './components/ReportGhost';
 import { BrowseGhosts } from './components/BrowseGhosts';
+import { BrowseGhostsPage } from './components/BrowseGhostsPage';
 import { UserProfile } from './components/UserProfile';
 import { SightingDetail } from './components/SightingDetail';
 import { User, GhostSighting, Screen } from './types';
@@ -177,6 +178,8 @@ export default function App() {
         }
         console.log('Rendering BrowseGhosts with sightings:', ghostSightings);
         return <BrowseGhosts sightings={ghostSightings} onSelectSighting={handleSelectSighting} />;
+      case 'ghosts':
+        return <BrowseGhostsPage />;
       case 'profile':
         return (
           <UserProfile
