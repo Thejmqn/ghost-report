@@ -169,7 +169,10 @@ export function BrowseGhostsPage({ user }: BrowseGhostsPageProps) {
       ) : (
         <div className="space-y-4">
           {filteredGhosts.map((ghost) => (
-            <Card key={ghost.id} className="hover:shadow-lg transition-shadow">
+            <Card 
+              key={ghost.id} 
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+            >
               <CardHeader>
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                   <CardTitle className="text-lg flex items-center space-x-2">
@@ -198,7 +201,7 @@ export function BrowseGhostsPage({ user }: BrowseGhostsPageProps) {
                 
                 <div className="pt-2 border-t">
                   <p className="text-xs text-muted-foreground">
-                    Visibility Rating: {ghost.visibility}/10
+                    Visibility Rating: {ghost.visibility}/10 • Click for details
                   </p>
 
                   {isGhostBuster && (

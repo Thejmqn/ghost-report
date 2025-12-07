@@ -6,12 +6,22 @@ import { BrowseGhosts } from './components/BrowseGhosts';
 import { BrowseGhostsPage } from './components/BrowseGhostsPage';
 import { UserProfile } from './components/UserProfile';
 import { SightingDetail } from './components/SightingDetail';
+import { GhostDetail } from './components/GhostDetail';
 import { User, GhostSighting, Screen } from './types';
+
+interface Ghost {
+  id: number;
+  type: string;
+  name: string;
+  description: string;
+  visibility: number;
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentScreen, setCurrentScreen] = useState<Screen>('report');
   const [selectedSighting, setSelectedSighting] = useState<GhostSighting | null>(null);
+  const [selectedGhost, setSelectedGhost] = useState<Ghost | null>(null);
   const [ghostSightings, setGhostSightingsState] = useState<GhostSighting[]>([]);
   const [loadingSightings, setLoadingSightings] = useState(false);
   const [errorLoadingSightings, setErrorLoadingSightings] = useState<string | null>(null);
@@ -90,6 +100,13 @@ export default function App() {
     localStorage.removeItem('ghostapp_user');
   };
 
+  const handleScreenChange = (screen: Screen) => {
+    setCurrentScreen(screen);
+    // Clear detail views when navigating to a different screen
+    setSelectedSighting(null);
+    setSelectedGhost(null);
+  };
+
   const handleSubmitSighting = (sightingData: GhostSighting) => {
     // Accept a full GhostSighting (from backend) and prepend to list
     console.log('Adding new sighting:', sightingData);
@@ -118,6 +135,15 @@ export default function App() {
 
   const handleBackFromDetail = () => {
     setSelectedSighting(null);
+    // Don't clear selectedGhost here - let the rendering logic handle it
+  };
+
+  const handleSelectGhost = (ghost: Ghost) => {
+    setSelectedGhost(ghost);
+  };
+
+  const handleBackFromGhostDetail = () => {
+    setSelectedGhost(null);
   };
 
   if (isCheckingAuth) {
@@ -137,13 +163,25 @@ export default function App() {
   const userSightings = ghostSightings.filter(sighting => sighting.userReportID === user.id);
 
   const renderCurrentScreen = () => {
-    // If viewing a sighting detail, show that instead
+    // If viewing a sighting detail, show that instead (takes priority)
     if (selectedSighting) {
       return (
         <SightingDetail 
           sighting={selectedSighting} 
           user={user}
           onBack={handleBackFromDetail}
+        />
+      );
+    }
+
+    // If viewing a ghost detail, show that
+    if (selectedGhost) {
+      return (
+        <GhostDetail
+          ghost={selectedGhost}
+          user={user}
+          onBack={handleBackFromGhostDetail}
+          onSelectSighting={handleSelectSighting}
         />
       );
     }
@@ -198,7 +236,7 @@ export default function App() {
     <div className="min-h-screen bg-background">
       <Navigation
         currentScreen={currentScreen}
-        onScreenChange={setCurrentScreen}
+        onScreenChange={handleScreenChange}
         user={user}
         onLogout={handleLogout}
       />
