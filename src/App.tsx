@@ -41,7 +41,7 @@ export default function App() {
 
   // Fetch sightings when component mounts
   useEffect(() => {
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
     const fetchSightings = async () => {
       setLoadingSightings(true);
       setErrorLoadingSightings(null);
