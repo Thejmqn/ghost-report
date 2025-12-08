@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -7,6 +7,13 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { GhostSighting, User } from '../types';
 import { MapPin, Clock, Eye } from 'lucide-react';
+
+declare global {
+  interface Window {
+    google: any;
+    initMap: () => void;
+  }
+}
 
 interface Ghost {
   id: string;
@@ -34,6 +41,97 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
   const [submitted, setSubmitted] = useState(false);
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   const [loadingGhosts, setLoadingGhosts] = useState(true);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  // Load Google Maps script
+  useEffect(() => {
+    const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    
+    if (!GOOGLE_MAPS_API_KEY) {
+      console.error('Google Maps API key not found. Please set VITE_GOOGLE_MAPS_API_KEY in your .env file');
+      return;
+    }
+    
+    if (window.google && window.google.maps) {
+      setMapsLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setMapsLoaded(true);
+    document.head.appendChild(script);
+
+    return () => {
+      // Cleanup script on unmount
+      const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`);
+      if (existingScript && existingScript.parentNode) {
+        existingScript.parentNode.removeChild(existingScript);
+      }
+    };
+  }, []);
+
+  // Initialize or update map when coordinates change
+  useEffect(() => {
+    if (!mapsLoaded || !mapRef.current) return;
+
+    const lat = parseFloat(formData.latitude);
+    const lng = parseFloat(formData.longitude);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      // If coordinates are invalid, hide map
+      if (mapRef.current) {
+        mapRef.current.style.display = 'none';
+      }
+      return;
+    }
+
+    // Show map first, then initialize
+    if (mapRef.current) {
+      mapRef.current.style.display = 'block';
+    }
+
+    const position = { lat, lng };
+
+    // Create map if it doesn't exist
+    if (!mapInstanceRef.current) {
+      // Small delay to ensure the container is fully rendered
+      setTimeout(() => {
+        if (!mapRef.current) return;
+        
+        mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+          center: position,
+          zoom: 15,
+          mapTypeId: 'roadmap'
+        });
+
+        markerRef.current = new window.google.maps.Marker({
+          position: position,
+          map: mapInstanceRef.current,
+          title: 'Sighting Location'
+        });
+      }, 100);
+    } else {
+      mapInstanceRef.current.setCenter(position);
+      
+      if (markerRef.current) {
+        markerRef.current.setPosition(position);
+      } else {
+        markerRef.current = new window.google.maps.Marker({
+          position: position,
+          map: mapInstanceRef.current,
+          title: 'Sighting Location'
+        });
+      }
+    }
+  }, [formData.latitude, formData.longitude, mapsLoaded]);
 
   // Fetch known ghosts from the API
   useEffect(() => {
@@ -61,6 +159,55 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
 
     fetchGhosts();
   }, []);
+
+  const handleGetCurrentLocation = () => {
+    setGettingLocation(true);
+    setLocationError(null);
+
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser');
+      setGettingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+        
+        setFormData(prev => ({
+          ...prev,
+          latitude: lat,
+          longitude: lng
+        }));
+        
+        setGettingLocation(false);
+      },
+      (error) => {
+        let errorMessage = 'Unable to retrieve your location';
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location permission denied. Please enable location access in your browser settings.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information is unavailable.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out.';
+            break;
+        }
+        
+        setLocationError(errorMessage);
+        setGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +285,9 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
         timeOfSighting: '',
         visibilityLevel: ''
       });
+      if (mapRef.current) {
+        mapRef.current.style.display = 'none';
+      }
     }, 3000);
   };
 
@@ -169,32 +319,55 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2 grid grid-cols-2 gap-2">
-              <div>
-                <Label htmlFor="latitude" className="flex items-center space-x-2">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center space-x-2">
                   <MapPin className="w-4 h-4" />
-                  <span>Latitude</span>
+                  <span>Location</span>
                 </Label>
-                <Input
-                  id="latitude"
-                  placeholder="e.g., 38.0336"
-                  value={formData.latitude}
-                  onChange={(e) => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
-                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGetCurrentLocation}
+                  disabled={gettingLocation}
+                >
+                  {gettingLocation ? 'Getting Location...' : 'Use Current Location'}
+                </Button>
               </div>
-              <div>
-                <Label htmlFor="longitude" className="flex items-center space-x-2">
-                  <MapPin className="w-4 h-4" />
-                  <span>Longitude</span>
-                </Label>
-                <Input
-                  id="longitude"
-                  placeholder="e.g., -78.5035"
-                  value={formData.longitude}
-                  onChange={(e) => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
-                />
+              
+              {locationError && (
+                <div className="p-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded text-sm">
+                  {locationError}
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Input
+                    id="latitude"
+                    placeholder="Latitude (e.g., 38.0336)"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Input
+                    id="longitude"
+                    placeholder="Longitude (e.g., -78.5035)"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
+                  />
+                </div>
               </div>
             </div>
+
+            {/* Map Display */}
+            <div 
+              ref={mapRef} 
+              className="w-full h-64 rounded-lg border border-border"
+              style={{ display: 'none', minHeight: '256px' }}
+            />
 
             <div className="space-y-2">
               <Label htmlFor="timeOfSighting" className="flex items-center space-x-2">

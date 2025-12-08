@@ -1,10 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Textarea } from './ui/textarea';
 import { GhostSighting, User } from '../types';
 import { MapPin, Clock, Eye, User as UserIcon, ArrowLeft, MessageSquare } from 'lucide-react';
+
+declare global {
+  interface Window {
+    google: any;
+  }
+}
 
 interface SightingComment {
   userID: string;
@@ -28,6 +34,58 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
   const [ghostName, setGhostName] = useState<string>((sighting as any).ghostName || 'Unknown Ghost');
   const [newGhostName, setNewGhostName] = useState<string>('');
   const [updatingGhost, setUpdatingGhost] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const [mapsLoaded, setMapsLoaded] = useState(false);
+
+  // Load Google Maps script
+  useEffect(() => {
+    const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    
+    if (!GOOGLE_MAPS_API_KEY) {
+      console.error('Google Maps API key not found. Please set VITE_GOOGLE_MAPS_API_KEY in your .env file');
+      return;
+    }
+    
+    if (window.google && window.google.maps) {
+      setMapsLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setMapsLoaded(true);
+    document.head.appendChild(script);
+  }, []);
+
+  // Initialize map when loaded and coordinates are available
+  useEffect(() => {
+    if (!mapsLoaded || !mapRef.current) return;
+    if (sighting.latitude === null || sighting.longitude === null) return;
+
+    const position = { lat: sighting.latitude, lng: sighting.longitude };
+
+    if (!mapInstanceRef.current) {
+      // Small delay to ensure the container is fully rendered
+      setTimeout(() => {
+        if (!mapRef.current) return;
+        
+        mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+          center: position,
+          zoom: 15,
+          mapTypeId: 'roadmap'
+        });
+
+        new window.google.maps.Marker({
+          position: position,
+          map: mapInstanceRef.current,
+          title: 'Sighting Location'
+        });
+      }, 100);
+    }
+  }, [mapsLoaded, sighting.latitude, sighting.longitude]);
 
   useEffect(() => {
     fetchComments();
@@ -75,7 +133,6 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
 
       if (resp.status === 201) {
         setNewComment('');
-        // Refresh comments
         await fetchComments();
       } else {
         const err = await resp.json().catch(() => ({}));
@@ -99,6 +156,8 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
     if (visibility >= 5) return 'Clear';
     return 'Faint';
   };
+
+  const hasValidCoordinates = sighting.latitude !== null && sighting.longitude !== null;
 
   return (
     <div className="max-w-4xl mx-auto p-4">
@@ -129,7 +188,7 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
             <div className="flex items-center space-x-2 text-muted-foreground">
               <MapPin className="w-4 h-4" />
               <span>
-                {(sighting.latitude !== null && sighting.longitude !== null) 
+                {hasValidCoordinates
                   ? `${sighting.latitude}, ${sighting.longitude}` 
                   : 'Unknown location'}
               </span>
@@ -143,6 +202,18 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
               <span>Reported by User #{sighting.userReportID}</span>
             </div>
           </div>
+
+          {/* Map Display */}
+          {hasValidCoordinates && (
+            <div className="pt-4 border-t">
+              <h3 className="font-semibold mb-2">Location</h3>
+              <div 
+                ref={mapRef} 
+                className="w-full h-64 rounded-lg border border-border"
+                style={{ minHeight: '256px' }}
+              />
+            </div>
+          )}
 
           <div className="pt-4 border-t">
             <h3 className="font-semibold mb-2">Description</h3>
@@ -203,7 +274,6 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
         </CardHeader>
         
         <CardContent className="space-y-6">
-          {/* Add Comment Form */}
           <form onSubmit={handleSubmitComment} className="space-y-3">
             <Textarea
               placeholder="Add your comment or observations..."
@@ -220,7 +290,6 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
             </Button>
           </form>
 
-          {/* Comments List */}
           <div className="space-y-4 pt-4 border-t">
             {loadingComments ? (
               <p className="text-center text-muted-foreground py-8">Loading comments...</p>
