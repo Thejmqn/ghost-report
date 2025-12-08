@@ -983,3 +983,29 @@ app.put('/api/users/:id/ghost-buster/alias', async (req, res) => {
     return res.status(500).json({ error: 'internal' });
   }
 });
+
+// PUT increment ghosts_busted counter (bust a ghost)
+app.put('/api/users/:id/ghost-buster/bust', async (req, res) => {
+  try {
+    while (!dbClient) await new Promise(r => setTimeout(r, 50));
+    const userId = req.params.id;
+
+    // Check if user is a ghost buster
+    const existing = await dbClient.query('SELECT ghosts_busted FROM Ghost_Buster WHERE userID = ?', [userId]);
+    
+    if (!existing || existing.length === 0) {
+      return res.status(404).json({ error: 'not_a_ghost_buster' });
+    }
+
+    const currentCount = Number(existing[0].ghosts_busted || 0);
+    const newCount = currentCount + 1;
+
+    // Update the count
+    await dbClient.run('UPDATE Ghost_Buster SET ghosts_busted = ? WHERE userID = ?', [newCount, userId]);
+
+    res.json({ ghosts_busted: newCount });
+  } catch (err) {
+    console.error('Error busting ghost:', err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
