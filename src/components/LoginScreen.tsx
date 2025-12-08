@@ -24,7 +24,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     setError(null);
     setLoading(true);
 
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
 
     (async () => {
       try {

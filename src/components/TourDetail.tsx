@@ -26,7 +26,7 @@ export function TourDetail({ tour, user, onBack, onSelectGhost }: TourDetailProp
   }, [tour.id]);
 
   const fetchGhosts = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
     setLoadingGhosts(true);
 
     try {
@@ -44,7 +44,7 @@ export function TourDetail({ tour, user, onBack, onSelectGhost }: TourDetailProp
   };
 
   const fetchParticipants = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
     setLoadingParticipants(true);
 
     try {
@@ -66,7 +66,7 @@ export function TourDetail({ tour, user, onBack, onSelectGhost }: TourDetailProp
   };
 
   const handleJoinTour = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
     setJoiningTour(true);
 
     try {
@@ -89,7 +89,7 @@ export function TourDetail({ tour, user, onBack, onSelectGhost }: TourDetailProp
   };
 
   const handleLeaveTour = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
     setJoiningTour(true);
 
     try {

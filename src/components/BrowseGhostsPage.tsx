@@ -24,7 +24,7 @@ export function BrowseGhostsPage({ onSelectGhost }: BrowseGhostsPageProps) {
 
   useEffect(() => {
     const fetchGhosts = async () => {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+      const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
       try {
         const resp = await fetch(`${apiBase}/api/ghosts`);
         if (!resp.ok) {
