@@ -37,14 +37,51 @@ export function GhostDetail({ ghost, user, onBack, onSelectSighting }: GhostDeta
   const [loadingSightings, setLoadingSightings] = useState(true);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Ghost Buster state
+  const [isGhostBuster, setIsGhostBuster] = useState(false);
+  const [ghostsBusted, setGhostsBusted] = useState(0);
+  const [isFighting, setIsFighting] = useState(false);
+  const [loadingGhostBuster, setLoadingGhostBuster] = useState(true);
+  const [actionInProgress, setActionInProgress] = useState(false);
 
   useEffect(() => {
     fetchComments();
     fetchSightings();
+    fetchGhostBusterStatus();
   }, [ghost.id]);
 
+  const fetchGhostBusterStatus = async () => {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    setLoadingGhostBuster(true);
+    
+    try {
+      // Check if user is a ghost buster
+      const gbResp = await fetch(`${apiBase}/api/users/${user.id}/ghost-buster`);
+      if (gbResp.ok) {
+        const gbData = await gbResp.json();
+        setIsGhostBuster(gbData.isGhostBuster);
+        setGhostsBusted(gbData.ghosts_busted || 0);
+        
+        // Check if currently fighting this ghost
+        const fightsResp = await fetch(`${apiBase}/api/users/${user.id}/fights`);
+        if (fightsResp.ok) {
+          const fightsData = await fightsResp.json();
+          const fightingGhosts = fightsData.fighting || [];
+          setIsFighting(fightingGhosts.includes(ghost.id));
+        }
+      } else {
+        setIsGhostBuster(false);
+      }
+    } catch (err) {
+      console.error('Error fetching ghost buster status:', err);
+    } finally {
+      setLoadingGhostBuster(false);
+    }
+  };
+
   const fetchComments = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setLoadingComments(true);
     setError(null);
     
@@ -64,7 +101,7 @@ export function GhostDetail({ ghost, user, onBack, onSelectSighting }: GhostDeta
   };
 
   const fetchSightings = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setLoadingSightings(true);
     
     try {
@@ -99,7 +136,7 @@ export function GhostDetail({ ghost, user, onBack, onSelectSighting }: GhostDeta
     e.preventDefault();
     if (!newComment.trim()) return;
 
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setSubmittingComment(true);
     setError(null);
 
@@ -124,6 +161,90 @@ export function GhostDetail({ ghost, user, onBack, onSelectSighting }: GhostDeta
       setError(err instanceof Error ? err.message : 'Failed to post comment');
     } finally {
       setSubmittingComment(false);
+    }
+  };
+
+  const handleStartFight = async () => {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    setActionInProgress(true);
+    
+    try {
+      const resp = await fetch(`${apiBase}/api/users/${user.id}/fights/${ghost.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fighting: true })
+      });
+      
+      if (resp.ok) {
+        setIsFighting(true);
+      } else {
+        setError('Failed to start fight');
+      }
+    } catch (err) {
+      console.error('Error starting fight:', err);
+      setError(err instanceof Error ? err.message : 'Failed to start fight');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleCancelFight = async () => {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    setActionInProgress(true);
+    
+    try {
+      const resp = await fetch(`${apiBase}/api/users/${user.id}/fights/${ghost.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fighting: false })
+      });
+      
+      if (resp.ok) {
+        setIsFighting(false);
+      } else {
+        setError('Failed to cancel fight');
+      }
+    } catch (err) {
+      console.error('Error canceling fight:', err);
+      setError(err instanceof Error ? err.message : 'Failed to cancel fight');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleBustGhost = async () => {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
+    setActionInProgress(true);
+    
+    try {
+      // First, cancel the fight
+      await fetch(`${apiBase}/api/users/${user.id}/fights/${ghost.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fighting: false })
+      });
+      
+      // Then increment ghosts_busted
+      const resp = await fetch(`${apiBase}/api/users/${user.id}/ghost-buster/bust`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (resp.ok) {
+        const data = await resp.json();
+        setIsFighting(false);
+        setGhostsBusted(data.ghosts_busted);
+        setError(null);
+        // Show success message
+        alert(`🎉 Ghost BUSTED! Total ghosts busted: ${data.ghosts_busted}`);
+      } else {
+        setError('Failed to bust ghost');
+      }
+    } catch (err) {
+      console.error('Error busting ghost:', err);
+      setError(err instanceof Error ? err.message : 'Failed to bust ghost');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
@@ -203,6 +324,52 @@ export function GhostDetail({ ghost, user, onBack, onSelectSighting }: GhostDeta
               Visibility Rating: {ghost.visibility}/10
             </p>
           </div>
+
+          {/* Ghost Buster Actions */}
+          {isGhostBuster && !loadingGhostBuster && (
+            <div className="pt-4 border-t">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">Ghost Buster Actions</h3>
+                <Badge variant="secondary">
+                  {ghostsBusted} Ghosts Busted
+                </Badge>
+              </div>
+              
+              {isFighting ? (
+                <div className="space-y-3">
+                  <div className="p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300 rounded-md">
+                    <p className="font-medium">⚔️ Currently Fighting This Ghost</p>
+                    <p className="text-sm mt-1">Time to finish the job!</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleBustGhost}
+                      disabled={actionInProgress}
+                      className="flex-1 bg-green-600 hover:bg-green-700"
+                    >
+                      {actionInProgress ? 'Busting...' : '👻 BUST THIS GHOST!'}
+                    </Button>
+                    <Button
+                      onClick={handleCancelFight}
+                      disabled={actionInProgress}
+                      variant="outline"
+                    >
+                      {actionInProgress ? 'Canceling...' : 'Cancel Fight'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  onClick={handleStartFight}
+                  disabled={actionInProgress}
+                  className="w-full"
+                  variant="default"
+                >
+                  {actionInProgress ? 'Starting Fight...' : '⚔️ Start Fighting This Ghost'}
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
