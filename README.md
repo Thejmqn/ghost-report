@@ -28,7 +28,7 @@
   ```powershell
   cd backend
   npm start
-  # backend listens on https://ghost-report-backend.azurewebsites.net by default
+  # backend listens on http://localhost:8100 by default
   ```
 
 Both the frontend and backend must be running at the same time for the application to work. 
@@ -36,7 +36,7 @@ Both the frontend and backend must be running at the same time for the applicati
   Notes:
   - The dev server uses SQLite by default. The database file is `dev.sqlite` (ignored by .gitignore).
   - To use MySQL in production, set environment variables `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE`, and set `USE_SQLITE=false` or `NODE_ENV=production` before starting the backend.
-  - If you want to change the backend URL the frontend calls, set `VITE_API_URL` in an `.env` file (for example `VITE_API_URL=https://ghost-report-backend.azurewebsites.net`).
+  - If you want to change the backend URL the frontend calls, set `VITE_API_URL` in an `.env` file (for example `VITE_API_URL=http://localhost:8100`).
 
 ## Running the code (cloud)
 The cloud server is still in development and is not ready at this moment.

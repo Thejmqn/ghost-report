@@ -31,7 +31,7 @@ export function CreateTour({ user, onBack, onTourCreated }: CreateTourProps) {
   }, []);
 
   const fetchGhosts = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     try {
       const resp = await fetch(`${apiBase}/api/ghosts`);
       if (!resp.ok) {
@@ -74,7 +74,7 @@ export function CreateTour({ user, onBack, onTourCreated }: CreateTourProps) {
       return;
     }
 
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setLoading(true);
 
     try {

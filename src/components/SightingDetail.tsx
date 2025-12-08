@@ -94,7 +94,7 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
   const fetchComments = async () => {
     try {
       setLoadingComments(true);
-      const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
       const resp = await fetch(`${apiBase}/api/sightings/${sighting.id}/comments`);
       
       if (resp.ok) {
@@ -121,7 +121,7 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
 
     setSubmittingComment(true);
     try {
-      const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
       const resp = await fetch(`${apiBase}/api/sightings/${sighting.id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -236,7 +236,7 @@ export function SightingDetail({ sighting, user, onBack }: SightingDetailProps) 
                     if (!newGhostName.trim()) return;
                     setUpdatingGhost(true);
                     try {
-                      const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+                      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
                       const resp = await fetch(`${apiBase}/api/sightings/${sighting.id}/ghost-name`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },

@@ -22,7 +22,7 @@ export function ToursPage({ user, onSelectTour, onCreateTour }: ToursPageProps) 
   }, [user.id]);
 
   const fetchTours = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setLoading(true);
     setError(null);
 
@@ -56,7 +56,7 @@ export function ToursPage({ user, onSelectTour, onCreateTour }: ToursPageProps) 
   const handleJoinTour = async (tourId: string, e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setJoiningTour(tourId);
 
     try {
@@ -82,7 +82,7 @@ export function ToursPage({ user, onSelectTour, onCreateTour }: ToursPageProps) 
   const handleLeaveTour = async (tourId: string, e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setJoiningTour(tourId);
 
     try {

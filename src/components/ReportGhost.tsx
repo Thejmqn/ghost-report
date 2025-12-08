@@ -137,7 +137,7 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
   useEffect(() => {
     const fetchGhosts = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
         const resp = await fetch(`${apiBase}/api/ghosts`);
         if (resp.ok) {
           const data = await resp.json();
@@ -233,7 +233,7 @@ export function ReportGhost({ user, onSubmitSighting }: ReportGhostProps) {
 
     console.log('Submitting sighting with payload:', payload);
 
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     const resp = await fetch(`${apiBase}/api/sightings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

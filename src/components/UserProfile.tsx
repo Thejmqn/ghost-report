@@ -31,7 +31,7 @@ export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSig
     const fetchGb = async () => {
       setGbLoading(true);
       try {
-        const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
         const resp = await fetch(`${apiBase}/api/users/${user.id}/ghost-buster`);
         if (resp.ok) {
           const data = await resp.json();
@@ -124,7 +124,7 @@ export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSig
                       const shouldBe = e.target.checked;
                       setGbToggling(true);
                       try {
-                        const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+                        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
                         const resp = await fetch(`${apiBase}/api/users/${user.id}/ghost-buster`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
@@ -166,7 +166,7 @@ export function UserProfile({ user, userSightings, onUpdateSighting, onDeleteSig
                         onClick={async () => {
                           setGbSaving(true);
                           try {
-                            const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+                            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
                             const resp = await fetch(`${apiBase}/api/users/${user.id}/ghost-buster/alias`, {
                               method: 'PUT',
                               headers: { 'Content-Type': 'application/json' },

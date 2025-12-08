@@ -44,7 +44,7 @@ export function GhostDetail({ ghost, user, onBack, onSelectSighting }: GhostDeta
   }, [ghost.id]);
 
   const fetchComments = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setLoadingComments(true);
     setError(null);
     
@@ -64,7 +64,7 @@ export function GhostDetail({ ghost, user, onBack, onSelectSighting }: GhostDeta
   };
 
   const fetchSightings = async () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setLoadingSightings(true);
     
     try {
@@ -99,7 +99,7 @@ export function GhostDetail({ ghost, user, onBack, onSelectSighting }: GhostDeta
     e.preventDefault();
     if (!newComment.trim()) return;
 
-    const apiBase = import.meta.env.VITE_API_URL || 'https://ghost-report-backend.azurewebsites.net';
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8100';
     setSubmittingComment(true);
     setError(null);
 
